@@ -1,0 +1,30 @@
+{
+  "name": "Mi Dinero Dev Environment",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "mi_dinero_api",
+  "workspaceFolder": "/app",
+  
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-azuretools.vscode-docker",
+        "eamodio.gitlens",
+        "Prisma.prisma"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "sh",
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "[prisma]": {
+          "editor.defaultFormatter": "Prisma.prisma"
+        }
+      }
+    }
+  },
+  
+  "shutdownAction": "stopCompose",
+  
+  "forwardPorts": [3001]
+}
