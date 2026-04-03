@@ -16,6 +16,39 @@ class DatabaseConnection {
         process.env.NODE_ENV === "development"
           ? ["query", "error", "warn"]
           : ["error"],
+    }).$extends({
+      name: "softDelete",
+      query: {
+        $allModels: {
+          async findMany({ args, query }) {
+            args.where = { ...args.where, deletedAt: null };
+            return query(args);
+          },
+          async findFirst({ args, query }) {
+            args.where = { ...args.where, deletedAt: null };
+            return query(args);
+          },
+          async findUnique({ args, query }) {
+            args.where = { ...args.where, deletedAt: null };
+            return query(args);
+          },
+          async update({ args, query }) {
+            args.where = { ...args.where, deletedAt: null };
+            return query(args);
+          },
+          async delete({ args, query }) {
+            return query({
+              ...args,
+              data: { deletedAt: new Date() },
+            }).catch(() => {
+              return prisma[args.model].update({
+                where: args.where,
+                data: { deletedAt: new Date() },
+              });
+            });
+          },
+        },
+      },
     });
 
     DatabaseConnection.instance = this;
