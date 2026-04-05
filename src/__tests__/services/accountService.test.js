@@ -94,7 +94,7 @@ describe("accountService", () => {
     });
   });
 
-  describe.only("updateAccount", () => {
+  describe("updateAccount", () => {
     it("should update and return the account", async () => {
       const updatedAccount = { id: 1, name: "Updated Savings" };
       prisma.account.update.mockResolvedValue(updatedAccount);

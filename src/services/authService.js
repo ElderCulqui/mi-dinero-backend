@@ -33,7 +33,14 @@ const loginUser = async (email, password) => {
     { expiresIn: "2h" },
   );
 
-  return token;
+  return {
+    token: token,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+    },
+  };
 };
 
 module.exports = { registerUser, loginUser };
