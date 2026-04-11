@@ -21,7 +21,8 @@ exports.getAccountById = async (id) => {
 };
 
 exports.getAccounts = async () => {
-  const result = await paginate("account");
+  // const result = await paginate("account");
+  const result = await prisma.account.findMany();
   return result;
 };
 
