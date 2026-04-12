@@ -1,4 +1,4 @@
-const { PrismaClient } = require("@prisma/client");
+const { PrismaClient, Prisma } = require("@prisma/client");
 const { PrismaPg } = require("@prisma/adapter-pg");
 
 class DatabaseConnection {
@@ -36,15 +36,15 @@ class DatabaseConnection {
             args.where = { ...args.where, deletedAt: null };
             return query(args);
           },
-          async delete({ args, query }) {
-            return query({
-              ...args,
+        },
+      },
+      model: {
+        $allModels: {
+          async delete(args) {
+            const context = Prisma.getExtensionContext(this);
+            return context.update({
+              where: args.where,
               data: { deletedAt: new Date() },
-            }).catch(() => {
-              return prisma[args.model].update({
-                where: args.where,
-                data: { deletedAt: new Date() },
-              });
             });
           },
         },

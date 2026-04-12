@@ -5,6 +5,8 @@ jest.mock("../../config/db", () => ({
       create: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
+      findMany: jest.fn(),
     },
   }),
 }));
@@ -80,17 +82,18 @@ describe("accountService", () => {
   });
 
   describe("getAccounts", () => {
-    it("should return paginated accounts", async () => {
-      const paginatedResult = {
-        data: [{ id: 1 }, { id: 2 }],
-        pagination: { page: 1, pageSize: 10, total: 2, totalPages: 1 },
-      };
-      paginate.mockResolvedValue(paginatedResult);
+    it("should return a list of accounts", async () => {
+      // const paginatedResult = {
+      //   data: [{ id: 1 }, { id: 2 }],
+      //   pagination: { page: 1, pageSize: 10, total: 2, totalPages: 1 },
+      // };
+      const data = [{ id: 1 }, { id: 2 }];
+      prisma.account.findMany.mockResolvedValue(data);
 
       const result = await accountService.getAccounts();
 
-      expect(result).toEqual(paginatedResult);
-      expect(paginate).toHaveBeenCalledWith("account");
+      expect(result).toEqual(data);
+      expect(prisma.account.findMany).toHaveBeenCalled();
     });
   });
 
@@ -111,18 +114,44 @@ describe("accountService", () => {
     });
 
     it("should throw an error if the account does not exist", async () => {
-      const prismaError = new Error("Record to update not found.");
+      const prismaError = new Error("Account not found");
       prismaError.code = "P2025";
 
       prisma.account.update.mockRejectedValue(prismaError);
 
       await expect(
         accountService.updateAccount("99", { name: "Nonexistent Account" }),
-      ).rejects.toThrow("Record to update not found.");
+      ).rejects.toThrow("Account not found");
 
       expect(prisma.account.update).toHaveBeenCalledWith({
         where: { id: 99 },
         data: { name: "Nonexistent Account" },
+      });
+    });
+  });
+
+  describe("deleteAccount", () => {
+    it("should delete the account", async () => {
+      prisma.account.delete.mockResolvedValue({ id: 1 });
+
+      await accountService.deleteAccount("1");
+
+      expect(prisma.account.delete).toHaveBeenCalledWith({
+        where: { id: 1 },
+      });
+    });
+
+    it("should throw an error if deletion fails", async () => {
+      const error = new Error("Account not found");
+      error.code = "P2025";
+      prisma.account.delete.mockRejectedValue(error);
+
+      await expect(accountService.deleteAccount("1")).rejects.toThrow(
+        "Account not found",
+      );
+
+      expect(prisma.account.delete).toHaveBeenCalledWith({
+        where: { id: 1 },
       });
     });
   });
