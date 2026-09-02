@@ -9,8 +9,8 @@ services:
     env_file: .env
     expose:
       - "${PORT}"
-    ports:
-      - "${PORT}:${PORT}"
+    # ports:
+    #   - "${PORT}:${PORT}"
     command: sh -c "apk add --no-cache git && npm install && npm run dev"
     networks:
       - local_network

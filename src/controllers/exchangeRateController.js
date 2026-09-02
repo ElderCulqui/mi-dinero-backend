@@ -3,7 +3,7 @@ const exchangeRateService = require("@/services/exchangeRateService");
 const syncManually = async (req, res) => {
   try {
     const { buy, sell } = await exchangeRateService.fetchFromBCRP();
-    await exchangeRateService.saveExchangeRate("USD", "PEN", buy, "SUNAT");
+    await exchangeRateService.saveExchangeRate("USD", "PEN", sell, "SUNAT");
     res.json({ message: "Exchange rate synced successfully", buy, sell });
   } catch (error) {
     res
