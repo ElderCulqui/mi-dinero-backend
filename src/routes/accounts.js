@@ -23,6 +23,10 @@ const accountValidationRules = [
     .optional()
     .isBoolean()
     .withMessage("isDefault must be a boolean"),
+  body("currency")
+    .optional()
+    .isIn(["PEN","USD"])
+    .withMessage("Currency must be PEN or USD")
 ];
 
 router.post(

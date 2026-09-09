@@ -20,8 +20,14 @@ model User {
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
   deletedAt  DateTime?
-  accounts   Account[]
-  categories Category[]
+  accounts      Account[]
+  categories    Category[]
+  billingCycles BillingCycle[]
+  transactions  Transaction[]
+  transfers     Transfer[]
+  loans         Loan[]
+  contacts      Contact[]
+  creditCards   CreditCard[]
 
   @@map("users")
 }
@@ -37,19 +43,57 @@ enum TransactionType {
   egreso
 }
 
+enum Currency { 
+  PEN 
+  USD 
+}
+
+enum TxnStatus { 
+  ejecutado 
+  anulado 
+}
+
+enum TxnSource { 
+  manual
+  loan
+  installment
+  reimbursement
+  transfer
+}
+
+enum CycleStatus {
+  abierto
+  cerrado
+  pagado
+}
+
+enum ShareStatus { 
+  pendiente 
+  cobrado 
+}
+
 model Account {
   id          Int         @id @default(autoincrement())
   userId      Int
-  user        User        @relation(fields: [userId], references: [id])
+  creditCardId  Int?
   name        String
   type        AccountType
+  currency    Currency    @default(PEN)
   balance     Float       @default(0)
-  creditLimit Float? // Solo para tarjetas de crédito
+  creditLimit Float?
   isActive    Boolean     @default(true)
   isDefault   Boolean     @default(false)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   deletedAt   DateTime?
+
+  user        User        @relation(fields: [userId], references: [id])
+  creditCard  CreditCard?  @relation(fields: [creditCardId], references: [id])
+
+  fromTransfers Transfer[] @relation("FromAccount")
+  toTransfers   Transfer[] @relation("ToAccount")
+  transactions  Transaction[]
+  loans         Loan[]
 
   @@map("accounts")
 }
@@ -65,6 +109,9 @@ model Category {
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   deletedAt DateTime?
+
+  transactions Transaction[]
+  loans        Loan[]
 
   @@map("categories")
 }
@@ -82,3 +129,246 @@ model ExchangeRate {
 
   @@map("exchange_rates")
 }
+
+model BillingCycle {
+  id             Int       @id @default(autoincrement())
+  userId         Int
+  creditCardId      Int
+  periodStart    DateTime
+  periodEnd      DateTime
+  dueDate        DateTime
+  bankAmount     Float?
+  status         CycleStatus @default(abierto)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  transactions  Transaction[]
+  user          User           @relation(fields: [userId], references: [id])
+  creditCard    CreditCard     @relation(fields: [creditCardId], references: [id])
+
+  @@map("billing_cycles")
+}
+
+model Transaction {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  accountId     Int
+  categoryId    Int?
+  type          TransactionType
+  amount        Float
+  amountBase    Float
+  description   String?
+  date          DateTime
+  status        TxnStatus  @default(ejecutado)
+  source        TxnSource  @default(manual)
+  billingCycleId  Int?
+  loanPaymentId   Int?
+  installmentId   Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  shares        TransactionShare[] @relation("ShareTransaction")
+  user          User @relation(fields: [userId], references: [id])
+  account       Account @relation(fields: [accountId], references: [id])
+  category      Category? @relation(fields: [categoryId], references: [id])
+  billingCycle  BillingCycle? @relation(fields: [billingCycleId], references: [id])
+  loanPayment   LoanPayment? @relation(fields: [loanPaymentId], references: [id])
+  installment   Installment? @relation(fields: [installmentId], references: [id])
+  reimbursementShares TransactionShare[] @relation("Reimbursement")
+  fromTransfers Transfer[] @relation("FromTxn")
+  toTransfers   Transfer[] @relation("ToTxn")
+
+  @@map("transactions")
+}
+
+model Transfer {
+  id              Int   @id @default(autoincrement())
+  userId          Int
+  fromAccountId   Int
+  toAccountId     Int
+  fromAmount      Float
+  toAmount        Float
+  fromCurrency    Currency
+  toCurrency      Currency
+  rate            Float?
+  date            DateTime
+  description     String?
+  fromTxnId       Int?
+  toTxnId         Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  user            User @relation(fields: [userId], references: [id])
+  fromAccount     Account @relation("FromAccount", fields: [fromAccountId], references: [id])
+  toAccount       Account @relation("ToAccount", fields: [toAccountId], references: [id])
+  fromTxn         Transaction? @relation("FromTxn", fields: [fromTxnId], references: [id])
+  toTxn           Transaction? @relation("ToTxn", fields: [toTxnId], references: [id])
+
+  @@map("transfers")
+}
+
+model Contact {
+  id              Int   @id @default(autoincrement())
+  userId          Int
+  name            String
+  note            String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  transactionShares TransactionShare[]
+  user            User @relation(fields: [userId], references: [id])
+
+  @@map("contacts")
+}
+
+model TransactionShare {
+  id                  Int   @id @default(autoincrement())
+  transactionId       Int
+  contactId           Int
+  amount              Float //Lo que debe, en la divisa de la transaccion
+  status              ShareStatus
+  paidDate            DateTime?
+  settlementRate      Float? // TC usado para cobrar (PEN por USD, etc.)
+  settlementCurrency  Currency? // divisa en que te pagó (ej. PEN)
+  settlementAmount    Float? // monto recibido (en settlementCurrency)
+  reimbursementTxnId  Int?  // Transaction ingreso real del cobro
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+
+  transaction         Transaction   @relation("ShareTransaction", fields: [transactionId], references: [id])
+  contact             Contact       @relation(fields: [contactId], references: [id])
+  reimbursementTxn    Transaction?  @relation("Reimbursement", fields: [reimbursementTxnId], references: [id])
+
+  @@map("transaction_shares")
+}
+
+enum LoanStatus { 
+  activo 
+  pagado 
+}
+
+model Loan {
+  id                  Int   @id @default(autoincrement())
+  userId              Int
+  name                String
+  currency            Currency
+  principal           Float
+  interestRate        Float?
+  termMonths          Int
+  startDate           DateTime
+  status              LoanStatus  @default(activo)
+  accountId           Int?
+  categoryId          Int?
+  description         String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+
+  payments            LoanPayment[]
+  user                User @relation(fields: [userId], references: [id])
+  account             Account? @relation(fields: [accountId], references: [id])
+  category            Category? @relation(fields: [categoryId], references: [id])
+
+  @@map("loans")
+}
+
+enum PayStatus { 
+  pendiente 
+  parcial 
+  pagado 
+  atrasado 
+}
+
+model LoanPayment {
+  id                  Int   @id @default(autoincrement())
+  loanId              Int
+  number              Int
+  dueDate             DateTime
+  amount              Float   // cuota esperada (en divisa del préstamo)
+  paidAmount          Float  @default(0) // acumulado de pagos (amortización parcial/total)
+  status              PayStatus @default(pendiente)
+  paidDate            DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+
+  loan                Loan @relation(fields: [loanId], references: [id])
+  transactions        Transaction[]
+
+  @@map("loan_payments")
+}
+
+enum PlanStatus { 
+  activo 
+  pagado 
+}
+
+model InstallmentPlan {
+  id                Int   @id @default(autoincrement())
+  userId            Int
+  accountId         Int
+  categoryId        Int?
+  description       String
+  currency          Currency
+  totalAmount       Float
+  installments      Int
+  amountPerInstallment  Float
+  startDate         DateTime
+  firstDueDate      DateTime
+  status            PlanStatus    @default(activo)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  installments_      Installment[]
+
+  @@map("installment_plans")
+}
+
+model Installment {
+  id                Int   @id @default(autoincrement())
+  installmentPlanId Int
+  number            Int
+  dueDate           DateTime
+  amount            Float   // couta esperada
+  paidAmount        Float @default(0)
+  status            PayStatus @default(pendiente)
+  paidDate          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  installmentPlan   InstallmentPlan @relation(fields: [installmentPlanId], references: [id])
+  transactions      Transaction[]
+
+
+  @@map("installments")
+}
+
+model CreditCard {
+  id                Int   @id @default(autoincrement())
+  userId            Int
+  name              String
+  brand             String?
+  bankCurrency      Currency?
+  isActive          Boolean @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  user              User @relation(fields: [userId], references: [id])
+  accounts          Account[]
+  billingCycles     BillingCycle[]
+
+  @@map("credit_cards")
+}
+
+
+
+
+
