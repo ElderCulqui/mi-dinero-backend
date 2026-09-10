@@ -1,12 +1,13 @@
 const { Router } = require("express");
 const { body } = require("express-validator");
-const accountController = require("../controllers/accountController");
+const controller = require("../controllers/accountController");
 const authenticateToken = require("../middlewares/auth");
 const validateRequest = require("../middlewares/validateRequest");
+const { requireOwnership, paramIntId } = require("../middlewares/validators");
 
 const router = Router();
 
-const accountValidationRules = [
+const rules = [
   body("name").notEmpty().withMessage("Name is required"),
   body("type")
     .notEmpty()
@@ -18,35 +19,46 @@ const accountValidationRules = [
     .if(body("type").equals("tarjeta_credito"))
     .notEmpty()
     .withMessage("Credit limit is required for credit card accounts")
-    .isNumeric(),
-  body("isDefault")
-    .optional()
-    .isBoolean()
-    .withMessage("isDefault must be a boolean"),
-  body("currency")
-    .optional()
-    .isIn(["PEN","USD"])
-    .withMessage("Currency must be PEN or USD")
+    .isFloat({ min: 0 }),
+  body("isDefault").optional().isBoolean(),
+  body("currency").optional().isIn(["PEN","USD"])
 ];
 
 router.post(
   "/",
   authenticateToken,
-  accountValidationRules,
+  rules,
   validateRequest,
-  accountController.createAccount,
+  controller.create,
+);
+router.get("/", authenticateToken, controller.getAll);
+
+router.get(
+  "/:id", 
+  authenticateToken, 
+  paramIntId(),
+  validateRequest,
+  requireOwnership("account", { notFoundMsg: "Account not found" }),
+  controller.getById
 );
 
 router.put(
   "/:id",
   authenticateToken,
-  accountValidationRules,
+  paramIntId(),
+  rules,
   validateRequest,
-  accountController.updateAccount,
+  requireOwnership("account", { notFoundMsg: "Account not found" }),
+  controller.update,
 );
 
-router.get("/:id", authenticateToken, accountController.getAccount);
-router.get("/", authenticateToken, accountController.getAccounts);
-router.delete("/:id", authenticateToken, accountController.deleteAccount);
+router.delete(
+  "/:id", 
+  authenticateToken, 
+  paramIntId(),
+  validateRequest,
+  requireOwnership("account", { notFoundMsg: "Account not found" }),
+  controller.destroy
+);
 
 module.exports = router;

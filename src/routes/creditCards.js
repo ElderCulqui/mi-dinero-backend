@@ -20,7 +20,7 @@ router.post(
     authenticateToken, 
     rules, 
     validateRequest, 
-    controller.createCreditCard
+    controller.create
 );
 router.get("/", authenticateToken, controller.getAll);
 router.get(

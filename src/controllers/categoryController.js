@@ -1,41 +1,29 @@
 const categoryService = require("@/services/categoryService");
 
-const createCategory = async (req, res) => {
+const create = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const data = { ...req.body, userId };
-    const category = await categoryService.createCategory(data);
+    const data = { ...req.body, userId: req.user.id };
+    const category = await categoryService.create(data);
     res.status(201).json(category);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 };
 
-const getCategory = async (req, res) => {
-  try {
-    const category = await categoryService.getCategoryById(req.params.id);
-    if (!category) {
-      return res.status(404).json({ error: "Category not found" });
-    }
-    res.json(category);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
+const getById = async (req, res) => res.json(req.ownedResource);
 
-const getCategories = async (req, res) => {
+const getAll = async (req, res) => {
   try {
-    const { userId } = req.user;
-    const categories = await categoryService.getCategories(userId);
+    const categories = await categoryService.getAll(req.user.id);
     res.json(categories);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-const updateCategory = async (req, res) => {
+const update = async (req, res) => {
   try {
-    const updatedCategory = await categoryService.updateCategory(
+    const updatedCategory = await categoryService.update(
       req.params.id,
       req.body,
     );
@@ -45,9 +33,9 @@ const updateCategory = async (req, res) => {
   }
 };
 
-const deleteCategory = async (req, res) => {
+const destroy = async (req, res) => {
   try {
-    await categoryService.deleteCategory(req.params.id);
+    await categoryService.delete(req.params.id);
     res.status(204).send();
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -55,9 +43,9 @@ const deleteCategory = async (req, res) => {
 };
 
 module.exports = {
-  createCategory,
-  getCategory,
-  getCategories,
-  updateCategory,
-  deleteCategory,
+  create,
+  getById,
+  getAll,
+  update,
+  destroy,
 };

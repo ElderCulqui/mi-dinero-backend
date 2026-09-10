@@ -4,7 +4,6 @@ const syncManually = async (req, res) => {
   try {
     const { buy, sell } = await exchangeRateService.fetchFromBCRP();
     const rate = await exchangeRateService.saveExchangeRate("USD", "PEN", sell, "SUNAT");
-    // res.json({ message: "Exchange rate synced successfully", buy, sell });
     res.json(rate);
   } catch (error) {
     res

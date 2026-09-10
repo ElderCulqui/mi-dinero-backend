@@ -1,45 +1,53 @@
 const { Router } = require("express");
 const { body } = require("express-validator");
-const categoryController = require("../controllers/categoryController");
+const controller = require("../controllers/categoryController");
 const authenticateToken = require("../middlewares/auth");
 const validateRequest = require("../middlewares/validateRequest");
+const { requireOwnership, paramIntId } = require("../middlewares/validators");
 
 const router = Router();
 
-const categoryValidationRules = [
+const rules = [
   body("name").notEmpty().withMessage("Name is required"),
-  body("type")
-    .notEmpty()
-    .isIn(["ingreso", "egreso"])
-    .withMessage("Type must be either ingreso or egreso"),
-  body("color")
-    .optional()
-    .isHexColor()
-    .withMessage("Color must be a valid hex code"),
-  body("icon")
-    .optional()
-    .isString()
-    .withMessage("Icon must be a string representing the icon name"),
+  body("type").notEmpty().isIn(["ingreso", "egreso"]).withMessage("type ingreso|egreso"),
+  body("color").optional().isHexColor(),
+  body("icon").optional().isString(),
 ];
+
 
 router.post(
   "/",
   authenticateToken,
-  categoryValidationRules,
+  rules,
   validateRequest,
-  categoryController.createCategory,
+  controller.create,
+);
+router.get("/", authenticateToken, controller.getAll);
+router.get(
+  "/:id", 
+  authenticateToken, 
+  paramIntId(),
+  requireOwnership("category", { notFoundMsg: "Category not found" }),
+  controller.getById
 );
 
 router.put(
   "/:id",
   authenticateToken,
-  categoryValidationRules,
+  paramIntId(),
+  rules,
   validateRequest,
-  categoryController.updateCategory,
+  requireOwnership("category", { notFoundMsg: "Category not found" }),
+  controller.update,
 );
 
-router.get("/:id", authenticateToken, categoryController.getCategory);
-router.get("/", authenticateToken, categoryController.getCategories);
-router.delete("/:id", authenticateToken, categoryController.deleteCategory);
+router.delete(
+  "/:id", 
+  authenticateToken, 
+  paramIntId(),
+  validateRequest,
+  requireOwnership("category", { notFoundMsg: "Category not found" }),
+  controller.destroy
+);
 
 module.exports = router;

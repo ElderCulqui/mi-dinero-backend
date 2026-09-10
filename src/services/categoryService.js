@@ -1,7 +1,7 @@
 const db = require("@/config/db");
 const prisma = db.getClient();
 
-exports.createCategory = async (data) => {
+exports.create = async (data) => {
   const conflict = await prisma.category.findFirst({
     where: {
       name: data.name,
@@ -16,40 +16,34 @@ exports.createCategory = async (data) => {
     );
   }
 
-  return prisma.category.create({ data });
+  return prisma.category.create({ 
+    data: { ...data, userId: parseInt(data.userId) }
+  });
 };
 
-exports.getCategoryById = async (id) => {
-  return prisma.category.findUnique({ where: { id: parseInt(id) } });
-};
+exports.getById = async (id) => 
+  prisma.category.findUnique({ where: { id: parseInt(id) } });
 
-exports.getCategories = async (userId) => {
-  return prisma.category.findMany({ where: { userId } });
-};
+exports.getAll = async (userId) =>
+  prisma.category.findMany({ where: { userId: parseInt(userId) } });
 
-exports.updateCategory = async (id, data) => {
+exports.update = async (id, data) => {
   try {
     return await prisma.category.update({
       where: { id: parseInt(id) },
       data,
     });
   } catch (error) {
-    if (error.code === "P2025") {
-      throw new Error("Category not found");
-    }
+    if (error.code === "P2025") throw new Error("Category not found");
     throw error;
   }
 };
 
-exports.deleteCategory = async (id) => {
+exports.delete = async (id) => {
   try {
-    await prisma.category.delete({
-      where: { id: parseInt(id) },
-    });
+    await prisma.category.delete({ where: { id: parseInt(id) }, });
   } catch (error) {
-    if (error.code === "P2025") {
-      throw new Error("Category not found");
-    }
+    if (error.code === "P2025") throw new Error("Category not found");
     throw error;
   }
 };

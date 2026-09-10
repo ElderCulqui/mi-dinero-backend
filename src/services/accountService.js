@@ -2,55 +2,44 @@ const db = require("../config/db");
 const { paginate } = require("../helpers/paginationHelper");
 const prisma = db.getClient();
 
-exports.createAccount = async (data) => {
+exports.create = async (data) => {
   const conflict = await prisma.account.findFirst({
-    where: {
-      name: data.name,
-      type: data.type,
+    where: { name: data.name, type: data.type, userId: data.userId },
+  });
+  if (conflict) throw new Error("La cuenta con el mismo nombre y tipo ya existe");
+
+  return prisma.account.create({ 
+    data: {
+      ...data,
+      userId: parseInt(data.userId),
+      creditCardId: data.creditCardId ? parseInt(data.creditCardId) : null,
     },
   });
-  if (conflict) {
-    throw new Error("La cuenta con el mismo nombre y tipo ya existe");
-  }
-
-  return prisma.account.create({ data });
 };
 
-exports.getAccountById = async (id) => {
-  return prisma.account.findUnique({ where: { id: parseInt(id) } });
-};
+exports.getById = async (id) => 
+  prisma.account.findUnique({ where: { id: parseInt(id) } });
 
-exports.getAccounts = async (userId) => {
-  // const result = await paginate("account");
-  const result = await prisma.account.findMany({
-    where: { userId: parseInt(userId) },
-  });
-  return result;
-};
+exports.getAll = async (userId) =>
+  prisma.account.findMany({ where: { userId: parseInt(userId) }, });
 
-exports.updateAccount = async (id, data) => {
+exports.update = async (id, data) => {
   try {
     return await prisma.account.update({
       where: { id: parseInt(id) },
       data,
     });
   } catch (error) {
-    if (error.code === "P2025") {
-      throw new Error("Account not found");
-    }
+    if (error.code === "P2025") throw new Error("Account not found");
     throw error;
   }
 };
 
-exports.deleteAccount = async (id) => {
+exports.delete = async (id) => {
   try {
-    await prisma.account.delete({
-      where: { id: parseInt(id) },
-    });
+    await prisma.account.delete({ where: { id: parseInt(id) }, });
   } catch (error) {
-    if (error.code === "P2025") {
-      throw new Error("Account not found");
-    }
+    if (error.code === "P2025") throw new Error("Account not found");
     throw error;
   }
 };

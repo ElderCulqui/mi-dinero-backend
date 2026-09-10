@@ -1,22 +1,22 @@
-const { registerUser, loginUser } = require("../services/authService");
+const service = require("../services/authService");
 
 const register = async (req, res) => {
   try {
     const { email, password, name } = req.body;
-    await registerUser(email, password, name);
-    return res.status(201).json({ message: "User registered successfully" });
+    const user = await service.register(email, password, name);
+    return res.status(201).json(user);
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    const status = error.message.includes("ya registrado") ? 409 : 400;
+    res.status(status).json({ error: error.message });
   }
 };
 
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const data = await loginUser(email, password);
-    return res.json(data);
+    const result = await service.login(email, password);
+    return res.json(result);
   } catch (error) {
-    console.error("Login error:", error);
     return res.status(400).json({ error: error.message });
   }
 };

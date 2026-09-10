@@ -3,55 +3,70 @@ const db = require("../config/db");
 const { AccountType } = require("@prisma/client");
 const prisma = db.getClient();
 
-exports.createTransaction = async (data) => {
+const safeParseInt = (v) => {
+  if (v === undefined || v === null || v === "") return undefined;
+  const n = parseInt(v);
+  return isNaN(n) ? undefined : n;
+};
 
-    const account = await prisma.account.findUnique({ where: { id: parseInt(data.accountId) } })
+exports.create = async (data) => {
+    const account = await prisma.account.findUnique({ 
+      where: { id: safeParseInt(data.accountId) } 
+    })
+    if (!account) throw new Error("Account no existe o fue eliminada");
     const amountBase = await convertToBase(data.amount, account.currency, data.date)
 
-    if (account.type === AccountType.tarjeta_credito) {
-        const cycle = await resolveBillingCycle(account.id, data.date);
-        data.billingCycleId = cycle ? parseInt(cycle.id) : null;
+    let billingCycleId = null
+    if (account.type === AccountType.tarjeta_credito && account.creditCardId) {
+        const cycle = await resolveBillingCycle(account.creditCardId, data.date);
+        billingCycleId = cycle ? cycle.id : null;
     }
-    data.accountId = parseInt(data.accountId);
-    data.categoryId = parseInt(data.categoryId);
 
-    return prisma.transaction.create({ data: { ...data, amountBase } })
-}
-
-exports.getTransactions = async (userId, filters) => {
-    //TODO: Agregar los filtros opcionales type, accountId, categoryId, source, rango date.
-    const result = await prisma.transaction.findMany({
-        where: { userId: parseInt(userId) }
+    return prisma.transaction.create({ 
+      data: { 
+        ...data, 
+        userId: safeParseInt(data.userId),
+        accountId: safeParseInt(data.accountId),
+        categoryId: safeParseInt(data.categoryId),
+        billingCycleId: safeParseInt(data.billingCycleId) ?? billingCycleId,
+        amountBase 
+      } 
     })
-    return result;
 }
 
-exports.getTransactionById = async (id) => {
+exports.getAll = async (userId, filters = {}) => {
+    const where = { userId: safeParseInt(userId) };
+    if (filters.type) where.type = filters.type;
+    if (filters.accountId) where.accountId = safeParseInt(filters.accountId);
+    if (filters.categoryId) where.categoryId = safeParseInt(filters.categoryId);
+    if (filters.source) where.source = filters.source;
+    if (filters.from || filters.to) {
+      where.date = {};
+      if (filters.from) where.date.gte = new Date(filters.from);
+      if (filters.to) where.date.lte = new Date(filters.to);
+    }
+    return prisma.transaction.findMany({ where });
+}
+
+exports.getById = async (id) => {
   return prisma.transaction.findUnique({ where: { id: parseInt(id) } });
 };
 
-exports.deleteTransaction = async (id) => {
+exports.delete = async (id) => {
   try {
-    await prisma.transaction.delete({
-      where: { id: parseInt(id) },
-    });
+    await prisma.transaction.delete({ where: { id: parseInt(id) } });
   } catch (error) {
-    if (error.code === "P2025") {
-      throw new Error("Transaction not found");
-    }
+    if (error.code === "P2025") throw new Error("Transaction not found");
     throw error;
   }
 };
 
-async function resolveBillingCycle(accountId, date) {
-  const account = await prisma.account.findUnique({ where: { id: accountId }});
-  if (!account?.creditCardId) return null;
-
+async function resolveBillingCycle(creditCardId, date) {
   return prisma.billingCycle.findFirst({
     where: {
-      creditCardId: account.creditCardId,
+      creditCardId,
       periodStart: { lte: date },
       periodEnd: { gte: date }
-    }
-  })
+    },
+  });
 }
