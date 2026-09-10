@@ -1,44 +1,61 @@
 const db = require("../config/db");
 const prisma = db.getClient();
 
-exports.createCreditCard = async (data) => {
-    return prisma.creditCard.create({ data })
+const DEFAULT_CURRENCY = "PEN";
+
+const toInt = (v) => (v === undefined || v === null ? v : parseInt(v));
+
+exports.create = async (data) => {
+    return prisma.creditCard.create({ 
+      data: {
+        ...data,
+        bankCurrency: data.bankCurrency || DEFAULT_CURRENCY,
+        userId: toInt(data.userId)
+      },
+    });
+};
+
+exports.getAll = async (userId, filters = {}) => {
+  const where = { userId: parseInt(userId)};
+  
+  if (filters.isActive !== undefined) where.isActive = filters.isActive === "true" || filters.isActive === true;
+  if (filters.name) where.name = { contains: filters.name, mode: "insensitive" };
+  
+  return prisma.creditCard.findMany({ where });
 }
 
-exports.getCreditCards = async (userId, filters) => {
-    const result = await prisma.creditCard.findMany({
-        where: { userId: parseInt(userId) }
-    })
-    return result;
-}
-
-exports.getCreditCardById = async (id) => {
+exports.getById = async (id) => {
   return prisma.creditCard.findUnique({ where: { id: parseInt(id) } });
 };
 
-exports.updateCreditCard = async (id, data) => {
+exports.update = async (id, data) => {
   try {
     return await prisma.creditCard.update({
       where: { id: parseInt(id) },
       data,
     });
   } catch (error) {
-    if (error.code === "P2025") {
-      throw new Error("CreditCard not found");
-    }
+    if (error.code === "P2025") throw new Error("CreditCard not found");
     throw error;
   }
 };
 
-exports.deleteCreditCard = async (id) => {
+exports.delete = async (id) => {
   try {
-    //TODO:  prisma.$transaction([updateMany BillingCycle, updateMany Account, update CreditCard]) todos con mismo deletedAt
-    await prisma.creditCard.delete({
-      where: { id: parseInt(id) },
-    });
+    await prisma.$transaction([
+      prisma.billingCycle.delete({
+        where: { creditCardId: parseInt(id), deletedAt: null }
+      }),
+      prisma.account.delete({
+        where: { creditCardId: parseInt(id), deletedAt: null }
+      }),
+      prisma.creditCard.delete({
+        where: { id: parseInt(id) }
+      }),
+    ]);
   } catch (error) {
     if (error.code === "P2025") {
-      throw new Error("Transaction not found");
+      throw new Error("CreditCard not found");
     }
     throw error;
   }

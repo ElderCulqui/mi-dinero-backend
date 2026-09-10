@@ -1,53 +1,41 @@
 const creditCardService = require("@/services/creditCardService");
 
-const createCreditCard = async (req, res) => {
+const create = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const data = { ...req.body, userId };
-    const creditCard = await creditCardService.createCreditCard(data);
-    res.status(201).json(creditCard);
+    const data = { ...req.body, userId: req.user.id };
+    const card = await creditCardService.create(data);
+    res.status(201).json(card);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 };
 
-const getCreditCard = async (req, res) => {
+const getById = async (req, res) => res.json(req.ownedResource);
+
+const getAll = async (req, res) => {
   try {
-    const creditCard = await creditCardService.getCreditCardById(req.params.id);
-    if (!creditCard) {
-      return res.status(404).json({ error: "CreditCard not found" });
-    }
-    res.json(creditCard);
+    const cards = await creditCardService.getAll(req.user.id, req.query);
+    res.json(cards);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-const getCreditCards = async (req, res) => {
+const update = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const creditCards = await creditCardService.getCreditCards(userId);
-    res.json(creditCards);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-const updateCreditCard = async (req, res) => {
-  try {
-    const updatedCreditCard = await creditCardService.updateCreditCard(
+    const updated = await creditCardService.update(
       req.params.id,
       req.body,
     );
-    res.json(updatedCreditCard);
+    res.json(updated);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 };
 
-const deleteCreditCard = async (req, res) => {
+const destroy = async (req, res) => {
   try {
-    await creditCardService.deleteCreditCard(req.params.id);
+    await creditCardService.delete(req.params.id);
     res.status(204).send();
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -55,9 +43,9 @@ const deleteCreditCard = async (req, res) => {
 };
 
 module.exports = {
-  createCreditCard,
-  getCreditCard,
-  getCreditCards,
-  updateCreditCard,
-  deleteCreditCard,
+  create,
+  getAll,
+  getById,
+  update,
+  destroy,
 };
