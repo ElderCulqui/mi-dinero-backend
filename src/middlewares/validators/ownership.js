@@ -3,7 +3,7 @@ const prisma = db.getClient();
 
 const requireOwnership = (
     modelName, 
-    { idParam = "id", userIdField = "userId", notFoundMsg } = {}
+    { idParam = "id", userIdField = "userId", notFoundMsg, include, select } = {}
 ) => {
     return async (req, res, next) => {
         try {
@@ -11,7 +11,11 @@ const requireOwnership = (
             if (isNaN(id)) {
                 return res.status(400).json({ error: `${idParam} inválido`});
             }
-            const row = await prisma[modelName].findUnique({ where: { id } });
+            const row = await prisma[modelName].findUnique({ 
+                where: { id },
+                ...(include && { include }),
+                ...(select && { select })
+            });
             if (!row) {
                 return res.status(404).json({ error: notFoundMsg || `${modelName} not found`});
             }

@@ -23,6 +23,22 @@ const createRules = [
   body("billingCycleId").optional().isInt(),
 ];
 
+const updateRules = [
+  body("type").optional().isIn(["ingreso", "egreso"]),
+  body("amount").optional().isFloat({ min: 0 }),
+  body("date").optional().isISO8601(),
+  body("categoryId").optional({ nullable: true }).isInt(),
+  body("accountId").optional().isInt(),
+  body("billingCycleId").optional({ nullable: true }).isInt(),
+  body("description").optional({ nullable: true }).isString(),
+  body("status").optional().isIn(["ejecutado", "anulado"]),
+  isInDateWindow("body", "date"),
+];
+
+const reassignRules = [
+  body("billingCycleId").optional({ nullable: true }).isInt(),
+];
+
 const listQueryRules = [
   query("type").optional().isIn(["ingreso", "egreso"]),
   query("accountId").optional().isInt(),
@@ -34,6 +50,25 @@ const listQueryRules = [
 
 router.post("/", authenticateToken, createRules, validateRequest, controller.create);
 router.get("/", authenticateToken, listQueryRules, validateRequest, controller.getAll);
+router.put(
+  "/:id",
+  authenticateToken,
+  paramIntId(),
+  updateRules,
+  validateRequest,
+  requireOwnership("transaction", { notFoundMsg: "Transaction not found" }),
+  controller.update
+);
+
+router.patch(
+  "/:id/billing-cycle",
+  authenticateToken,
+  paramIntId(),
+  reassignRules,
+  validateRequest,
+  requireOwnership("transaction", { notFoundMsg: "Transaction not found" }),
+  controller.reassignBillingCycle
+);
 router.get(
   "/:id", 
   authenticateToken, 

@@ -1,6 +1,7 @@
 const { Router } = require("express");
-const { body } = require("express-validator");
+const { body, query } = require("express-validator");
 const controller = require("../controllers/creditCardController");
+const billingCycleController = require("../controllers/billingCycleController");
 const authenticateToken = require("../middlewares/auth");
 const validateRequest = require("../middlewares/validateRequest");
 const { requireOwnership, paramIntId } = require("../middlewares/validators")
@@ -14,6 +15,11 @@ const rules = [
   body("isActive").optional().isBoolean(),
 ];
 
+const listQueryRules = [
+  query("isActive").optional().isBoolean(),
+  query("name").optional().isString(),
+];
+
 router.post(
     "/", 
     authenticateToken, 
@@ -21,15 +27,39 @@ router.post(
     validateRequest, 
     controller.create
 );
-router.get("/", authenticateToken, controller.getAll);
+router.get(
+  "/", 
+  listQueryRules,
+  validateRequest,
+  authenticateToken, 
+  controller.getAll
+);
 router.get(
   "/:id", 
   authenticateToken,
   paramIntId(),
   validateRequest,
-  requireOwnership("creditCard", { notFoundMsg: "CreditCard not found" }),   
+  requireOwnership("creditCard", { 
+    notFoundMsg: "CreditCard not found",
+    include: {
+      accounts: { where: { deletedAt: null } },
+      billingCycles: {
+        where: { deletedAt: null },
+        orderBy: { perioStart: "desc" }
+      },
+    },
+  }),   
   controller.getById
 );
+router.get(
+  "/:id/billing-cycles",
+  authenticateToken,
+  paramIntId(),
+  query("year").optional().isInt({ min: 2020, max: 2100 }),
+  validateRequest,
+  requireOwnership("creditCard", { notFoundMsg: "CreditCard not found" }),
+  billingCycleController.getByCreditCard
+)
 router.put(
   "/:id",
   authenticateToken,

@@ -23,6 +23,14 @@ const getAll = async (req, res) => {
   }
 };
 
+const update = async (req, res) => {
+  try {
+    const updated = await billingCycleService.update(req.params.id, req.body);
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
 
 const destroy = async (req, res) => {
   try {
@@ -33,9 +41,30 @@ const destroy = async (req, res) => {
   }
 };
 
+const getByCreditCard = async (req, res) => {
+  try {
+    const cycles = await billingCycleService.getByCreditCard(req.params.id, req.query.year);
+    res.json(cycles);
+  } catch(error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+const getSummary = async (req, res) => {
+  try {
+    const summary = await billingCycleService.getSummary(req.params.id);
+    res.json(summary);
+  } catch(error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
 module.exports = {
   create,
+  update,
   getAll,
   getById,
+  getByCreditCard,
+  getSummary,
   destroy,
 };

@@ -21,6 +21,24 @@ const getAll = async (req, res) => {
   }
 };
 
+const update = async (req, res) => {
+  try {
+    const updated = await transactionService.update(req.params.id, req.body);
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+const reassignBillingCycle = async (req, res) => {
+  try {
+    const updated = await transactionService.reassignBillingCycle(req.params.id, req.body.billingCycleId);
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 const destroy = async (req, res) => {
   try {
     await transactionService.delete(req.params.id);
@@ -32,7 +50,9 @@ const destroy = async (req, res) => {
 
 module.exports = {
   create,
+  update,
   getById,
   getAll,
+  reassignBillingCycle,
   destroy
 };

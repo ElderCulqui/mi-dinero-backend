@@ -11,7 +11,7 @@ async function paginate(model, page = 1, pageSize = 10, options = {}) {
       ...options,
     }),
     prisma[model].count({
-      where: options.where || {},
+      where: { ...(options.where || {}), deletedAt: null },
     }),
   ]);
 

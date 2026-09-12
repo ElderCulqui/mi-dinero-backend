@@ -1,4 +1,4 @@
-const { convertToBase } = require("@/helpers/currencyHelper");
+const { convertToBase } = require("../helpers/currencyHelper");
 const db = require("../config/db");
 const { AccountType } = require("@prisma/client");
 const prisma = db.getClient();
@@ -51,6 +51,66 @@ exports.getAll = async (userId, filters = {}) => {
 exports.getById = async (id) => {
   return prisma.transaction.findUnique({ where: { id: parseInt(id) } });
 };
+
+exports.update = async (id, data) => {
+  const txnId = parseInt(id);
+  const current = await prisma.transaction.findUnique({ where: { id: txnId } });
+  if (!current) throw new Error("Transaction not found");
+
+  const accountId = data.accountId !== undefined ? safeParseInt(data.accountId) : current.accountId;
+  const account = await prisma.account.findUnique({ where: { id: accountId }});
+  if (!account) throw new Error("Account no existe o fue eliminada");
+
+  const amount = data.amount !== undefined ? Number(data.amount) : current.amount;
+  const date = data.date !== undefined ? new Date(data.date) : current.date;
+  const amountBase = await convertToBase(amount, account.currency, date);
+
+  let billingCycleId = null;
+  if (account.type == AccountType.tarjeta_credito && account.creditCardId) {
+    const cycle = await resolveBillingCycle(account.creditCardId, date)
+    billingCycleId = cycle ? cycle.id : null;
+  }
+  if (data.billingCycleId !== undefined) {
+    billingCycleId = safeParseInt(data.billingCycleId) ?? null;
+  }
+
+  const payload = {
+    type: data.type ?? current.type,
+    amount,
+    date,
+    amountBase,
+    description: data.description ?? current.description,
+    status: data.status ?? current.status,
+    accountId,
+    categoryId: data.categoryId !== undefined ? safeParseInt(data.categoryId) : current.categoryId,
+    billingCycleId,
+  }
+  
+  try {
+    return await prisma.transaction.update({ where: { id: txnId }, data: payload });
+  } catch (error) {
+    if (error.code === "P2025") throw new Error("Transaction not found");
+    throw error;
+  }
+};
+
+exports.reassingBillingCycle = async (id, billingCycleId) => {
+  const txnId = parseInt(id);
+  const cycleId = safeParseInt(billingCycleId) ?? null;
+  
+  const txn = await prisma.transaction.findUnique({ where: { id: txnId } });
+  if (!txn) throw new Error("Transaction not found");
+
+  const cycle = await prisma.billingCycle.findUnique({ where: { id: cycleId } });
+  if (!cycle) throw new Error("BillingCycle not found");
+
+  if (cycle.userId !== txn.userId) throw new Error("BillingCycle no pertenece al usuario");
+
+  return prisma.transaction.update({
+    where: { id: txnId},
+    data: { billingCycleId: cycleId },
+  });
+}
 
 exports.delete = async (id) => {
   try {
