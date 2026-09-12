@@ -14,8 +14,8 @@ const syncManually = async (req, res) => {
 
 const getLatestRate = async (req, res) => {
   try {
-    const { base, target } = req.query;
-    const rate = await exchangeRateService.getLatestExchangeRate(base, target);
+    const { baseCurrency, targetCurrency } = req.query;
+    const rate = await exchangeRateService.getLatestExchangeRate(baseCurrency, targetCurrency);
     if (!rate) {
       return res.status(404).json({ error: "No exchange rate found" });
     }

@@ -41,16 +41,21 @@ exports.update = async (id, data) => {
 };
 
 exports.delete = async (id) => {
+  const cardId = parseInt(id);
+  const now = new Date();
   try {
     await prisma.$transaction([
-      prisma.billingCycle.delete({
-        where: { creditCardId: parseInt(id), deletedAt: null }
+      prisma.billingCycle.updateMany({
+        where: { creditCardId: cardId, deletedAt: null },
+        data: { deletedAt: now },
       }),
-      prisma.account.delete({
-        where: { creditCardId: parseInt(id), deletedAt: null }
+      prisma.account.updateMany({
+        where: { creditCardId: cardId, deletedAt: null },
+        data: { deletedAt: now },
       }),
-      prisma.creditCard.delete({
-        where: { id: parseInt(id) }
+      prisma.creditCard.update({
+        where: { id: cardId },
+        data: { deletedAt: now },
       }),
     ]);
   } catch (error) {

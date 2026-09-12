@@ -27,6 +27,7 @@ router.get(
   "/:id", 
   authenticateToken, 
   paramIntId(),
+  validateRequest,
   requireOwnership("category", { notFoundMsg: "Category not found" }),
   controller.getById
 );

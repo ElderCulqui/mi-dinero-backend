@@ -12,7 +12,6 @@ const rules = [
   body("brand").optional().isString(),
   body("bankCurrency").optional().isIn(["PEN", "USD"]).withMessage("Currency must be PEN or USD"),
   body("isActive").optional().isBoolean(),
-  body("description").optional().isString(),
 ];
 
 router.post(

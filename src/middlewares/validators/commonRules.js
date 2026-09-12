@@ -10,8 +10,8 @@ const positiveInt = (source, field, label) => {
 }
 
 const nonNegativeNumeric = (source, field, label) => {
-    const v = source === "param" ? param(field) : body(param);
-    return v.isFloat({ min: 0 }).withMessage(`${label || field} deber numérico ≥ 0`);
+    const v = source === "param" ? param(field) : body(field);
+    return v.isFloat({ min: 0 }).withMessage(`${label || field} debe ser numérico ≥ 0`);
 };
 
 module.exports = { paramIntId, positiveInt, nonNegativeNumeric };

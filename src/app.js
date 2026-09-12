@@ -21,13 +21,14 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(LoggerMiddleware);
-app.use(errorHandler);
 
 app.use("/api", routes);
 
 app.get("/", (req, res) => {
   res.send("Hello World from MI DINERO API!");
 });
+
+app.use(errorHandler);
 
 process.on("SIGINT", async () => {
   await db.disconnect();

@@ -1,7 +1,7 @@
 # CONTEXT.md — Mi Dinero Backend (estado de avance)
 
 > Documento de contexto para cualquier modelo/agente que retome este proyecto.
-> Generado el 2026-09-04 (actualizado tras refactor BillingCycle → CreditCard).
+> Creado el 2026-09-04. Última revisión: 2026-09-11 (revisión de estado + fixes).
 > Stack: Node + Express + Prisma 7 + PostgreSQL.
 
 ## 1. Objetivo
@@ -33,6 +33,11 @@ entre cuentas propias.
 - Si una transacción de tarjeta cae **fuera** de todo BillingCycle existente
   (por rango de fechas) → se crea con `billingCycleId = null` para
   reasignación manual posterior. No se auto-crea el ciclo.
+- Validación condicional por `type`: `creditCardId` es requerido solo para
+  cuentas `tarjeta_credito`; para el resto se permite `null` (implementado en
+  `routes/accounts.js` con `optional({ nullable, checkFalsy })` + `.if(...)`).
+- `BillingCycle.creditCardId` es requerido y se valida contra la tarjeta del
+  usuario (`existsActiveOwnedByUser`), más validación de solapamiento por rango.
 
 ## 3. Estructura de carpetas (src/)
 - config/db.js                  -> prisma client singleton con extensión `softDelete` (ver §7)
@@ -40,10 +45,15 @@ entre cuentas propias.
 - routes/                       -> index.js + un archivo por recurso
 - controllers/                  -> uno por recurso
 - services/                     -> uno por recurso (lógica)
-- helpers/                      -> paginationHelper.js, currencyHelper.js
+- helpers/                      -> paginationHelper.js, currencyHelper.js,
+                                   dateValidators.js (ventanas de fecha, dateAfter, maxDaysApart)
 - middlewares/                  -> auth.js, validateRequest.js, errorHandler.js, logger.js
+- middlewares/validators/       -> fkValidators.js (existsActive / existsActiveOwnedByUser),
+                                   ownership.js (requireOwnership), commonRules.js
+                                   (paramIntId, positiveInt, nonNegativeNumeric),
+                                   domainValidators.js (noBillingCycleOverlap), index.js
 - jobs/                         -> exchangeRateJob.js
-- __tests__/                    -> services/ y routes/controllers (Jest)
+- __tests__/                    -> services/, controllers/, routes/ (Jest) — ver §11
 
 Rutas registradas en `routes/index.js`:
 - /auth, /accounts, /categories, /exchange-rates, /transactions,
@@ -66,106 +76,79 @@ Migraciones aplicadas:
 - 20260903232846_add_user_id_to_contacts
 - 20260904025419_null_for_columns
 - 20260904064021_null_for_bank_amount
-- **20260904174225_all_new** (CreditCard + account.creditCardId + billing_cycles.creditCardId)
+- 20260904174225_all_new (CreditCard + account.creditCardId + billing_cycles.creditCardId)
 
 Tablas: users, accounts, categories, exchange_rates, billing_cycles,
 credit_cards, transactions, transfers, contacts, transaction_shares, loans,
 loan_payments, installment_plans, installments.
 
-### Fase 6 — Refactor BillingCycle → CreditCard  [HECHO A NIVEL SCHEMA, PENDIENTES ABAJO]
-Arquitectura nueva implementada parcialmente.
+### Correcciones aplicadas el 2026-09-11
+1. `creditCardService.delete`: faltaban `const cardId = parseInt(id)` y
+   `const now = new Date()` → `ReferenceError`. Añadidos. El cascade de soft
+   delete (billingCycles → accounts → creditCard) ya funciona con
+   `$transaction([updateMany, updateMany, update])`.
+2. `authService.register`: `prisma.user.findUnique({ where: { email } })`
+   (estaba `{ user: { email } }`, inválido).
+3. `routes/creditCards.js`: se quitó la regla `body("description")` porque el
+   modelo `CreditCard` no tiene ese campo.
+4. `routes/categories.js`: se añadió `validateRequest` tras `paramIntId()`.
+5. `middlewares/validators/commonRules.js`: `nonNegativeNumeric` usaba
+   `body(param)` (undefined) → corregido a `body(field)` y typo de mensaje.
+6. `app.js`: `errorHandler` estaba registrado ANTES de las rutas (nunca se
+   ejecutaba). Movido al final.
+7. `exchangeRateController.getLatestRate`: leía `req.query.base/target` pero la
+   ruta valida `baseCurrency/targetCurrency` → corregido.
 
+### Fase 6 — Refactor BillingCycle → CreditCard  [CASI CERRADA]
 Schema aplicado (migración `all_new`):
-- Nuevo modelo `CreditCard` (userId, name, brand?, bankCurrency, isActive,
-  soft delete).
+- Nuevo modelo `CreditCard` (userId, name, brand?, bankCurrency?, isActive,
+  soft delete). **No tiene `description`.**
 - `Account.creditCardId` (nullable; null para cuentas que NO son tarjeta).
 - `BillingCycle.accountId` reemplazado por `BillingCycle.creditCardId`.
 - `User.creditCards` relación añadida.
 
-Archivos nuevos:
-- src/services/creditCardService.js
+Archivos:
+- src/services/creditCardService.js (create, getAll, getById, update, delete)
 - src/controllers/creditCardController.js
-- src/routes/creditCards.js (registrado en routes/index.js)
+- src/routes/creditCards.js (registrado en routes/index.js; con requireOwnership)
 - prisma/migrations/20260904174225_all_new/migration.sql
 
-Archivos modificados para usar `creditCardId`:
-- src/services/billingCycleService.js
-- src/services/transactionService.js (helper `resolveBillingCycle` por
-  `account.creditCardId` — bug del punto 2.1 RESUELTO)
-- src/routes/billingCycles.js (validador `creditCardId`)
+Estado de pendientes:
+1. ✅ Cascade de soft delete en `delete` (billingCycles + accounts + tarjeta).
+2. ✅ `getAll(userId, filters)` soporta `isActive` y `name` (contains, insensitive).
+3. ✅ Ownership en GET/:id, PUT y DELETE vía `requireOwnership`.
+4. ❌ Falta un método/endpoint de detalle con `include` de cuentas y ciclos
+   (útil para pantalla de tarjeta).
+5. ✅ `create` fuerza `bankCurrency || "PEN"` si llega null/undefined.
+6. ✅ `BillingCycle.creditCardId` requerido y con ownership.
+7. ❌ Sin tests para `creditCardService` ni `billingCycleService`.
+8. ❌ Faltan `GET /credit-cards/:id/billing-cycles?year=YYYY` y
+   **`GET /billing-cycles/:id/summary`** (el más importante: total consolidado
+   `amountBase`, total en `bankCurrency`, lista de transactions del ciclo).
+9. ❌ Sin paginación en el listado de tarjetas (findMany sí filtra `deletedAt`
+   por la extensión §7).
 
-**Pendientes Fase 6:**
-1. `creditCardService.deleteCreditCard` sigue usando `prisma.creditCard.delete`
-   (hard delete); además tiene un `//TODO:` indicando que falta implementar la
-   cascada de soft delete hacia `Account` y `BillingCycle`. Cambiar a:
-   ```js
-   const now = new Date();
-   await prisma.$transaction([
-     prisma.billingCycle.updateMany({ where: { creditCardId: id, deletedAt: null }, data: { deletedAt: now } }),
-     prisma.account.updateMany({     where: { creditCardId: id, deletedAt: null }, data: { deletedAt: now } }),
-     prisma.creditCard.update({      where: { id }, data: { deletedAt: now } }),
-   ]);
-   ```
-   Nota: la extensión Prisma `softDelete` en `config/db.js` ya reescribe
-   `prisma.creditCard.delete(...)` a un update con `deletedAt`, pero NO
-   cascadea automáticamente a otras tablas; hay que hacerlo a mano.
-2. `creditCardService.getCreditCards` recibe `filters` pero lo ignora
-   (firma `getCreditCards(userId, filters)` → no usa `filters`). Añadir
-   soporte para filtros: `isActive`, búsqueda por `name` (contains).
-3. Validación `routes/creditCards.js`: `creditCardId` no aparece en ninguna
-   regla (es correcto, el body solo necesita name/brand/bankCurrency). Sin
-   embargo falta el middleware/auth de ownership antes de update/delete (hoy
-   cualquiera con token puede borrar cualquier CreditCard por id).
-4. No hay `creditCardService.getCreditCardsByUser` con `include` de cuentas y
-   ciclos (útil para la pantalla de detalle de tarjeta).
-5. `routes/creditCards.js` valida `bankCurrency` con `isIn(["PEN","USD"])`
-   pero el modelo lo define como **opcional** (`Currency?`). El servicio
-   no fuerza el default → si no se envía, en BD queda `NULL`. Decidir:
-   (a) forzar default PEN en el servicio si llega null/undefined;
-   (b) permitir null y mostrar "moneda a definir".
-6. `BillingCycle.creditCardId` validado como `.optional()` en el route
-   (`body("creditCardId").optional().isInt()`). Debería ser **requerido**
-   para nuevos ciclos (un BillingCycle sin tarjeta no tiene sentido).
-7. **No hay tests** para `creditCardService` ni `billingCycleService` (la
-   lógica con CreditCard nueva no está cubierta). Tampoco para
-   `transactionService` ni `transactionController`.
-8. Falta `GET /credit-cards/:id/billing-cycles?year=YYYY` y
-   `GET /billing-cycles/:id/summary` (este último es el más importante:
-   total consolidado `amountBase`, total en `bankCurrency`, lista de
-   transactions del ciclo).
-9. `routes/creditCards.js` no usa `controller.getCreditCards` con paginación
-   ni filtra `deletedAt: null` en listados. La extensión `softDelete` del
-   prisma client ya filtra automáticamente (ver §7), así que findMany está
-   cubierto; verificar que `getCreditCardById` también pase por ahí.
-
-### Fase 2 — Transactions + BillingCycles  [PARCIALMENTE HECHO, REPLANTEADO]
-Implementado en su mayoría, ahora con `creditCardId`.
-
+### Fase 2 — Transactions + BillingCycles  [PARCIALMENTE HECHO]
 Archivos:
-- helpers/currencyHelper.js  -> convertToBase(amount, currency, date)
-- services/transactionService.js (createTransaction + getTransactions + getTransactionById + deleteTransaction + resolveBillingCycle)
+- helpers/currencyHelper.js -> convertToBase(amount, currency, date)
+- services/transactionService.js (create, getAll, getById, delete, resolveBillingCycle)
 - services/billingCycleService.js (create, getById, getByUser, delete)
 - controllers/transactionController.js, billingCycleController.js
-- routes/transactions.js, billingCycles.js (registrados en routes/index.js)
+- routes/transactions.js, billingCycles.js (con middleware de validación/ownership)
 
-Pendientes / bugs conocidos en Fase 2:
-1. ~~BUG en transactionService.js:12~~ — RESUELTO en Fase 6; ahora `resolveBillingCycle`
-   busca por `account.creditCardId` (no por tipo de cuenta).
-2. deleteTransaction / deleteBillingCycle siguen usando `prisma.x.delete` (hard
-   delete). Aunque la extensión `softDelete` del prisma client (§7) los
-   reescribe a `update deletedAt`, **deleteBillingCycle** no está protegido:
-   no valida ownership (`userId`), cualquiera con token puede borrar cualquier
-   BillingCycle. deleteTransaction idem (no filtra `userId`).
-3. getTransactions tiene TODO: faltan filtros (type, accountId, categoryId,
-   source, rango de date).
-4. createTransaction no valida que la cuenta exista (account puede ser null →
-   crash en `.currency`) ni protege `categoryId` undefined antes de parseInt
-   (`parseInt(undefined)` → NaN).
-5. Falta método/route de UPDATE para Transaction y BillingCycle.
-6. `console.log` ya no aparece en transactionService (limpio).
-7. Transacción fuera de BillingCycle → guardada con `billingCycleId = null`
-   (decisión §2). No hay aún endpoint para reasignar a un ciclo.
-8. No hay tests.
+Estado de pendientes:
+1. ✅ `resolveBillingCycle` busca por `account.creditCardId`.
+2. ✅ Ownership de delete/getById resuelto a nivel de ruta con `requireOwnership`
+   (los services siguen usando `prisma.x.delete`, que la extensión convierte en
+   soft delete).
+3. ✅ `getAll` (transactions) soporta filtros type, accountId, categoryId,
+   source y rango `from`/`to` (validados en la ruta con `listQueryRules`).
+4. ✅ `create` valida que la cuenta exista ("Account no existe o fue eliminada")
+   y usa `safeParseInt` para `accountId`/`categoryId`/`billingCycleId`.
+5. ❌ Falta método/route de UPDATE para Transaction y BillingCycle.
+6. ✅ Sin `console.log` en transactionService.
+7. ❌ No hay endpoint para reasignar `billingCycleId` de una transacción.
+8. ❌ No hay tests de transactionService/transactionController/billingCycleController.
 
 ### Fase 3 — Contacts + TransactionShare + Transfers  [PENDIENTE]
 - CRUD Contact (solo el modelo existe; falta service/route/controller).
@@ -181,67 +164,75 @@ Pendientes / bugs conocidos en Fase 2:
   Transaction en tarjeta que cae en su BillingCycle por rango de fechas de
   la tarjeta dueña de la cuenta).
 
-### Fase 5 — Tests + Reportes  [PENDIENTE]
-- Tests por módulo:
-  - ✅ accountService (unit), categoryService (unit), accountController (unit),
-    accounts route (integration con supertest).
-  - ❌ creditCardService, billingCycleService, transactionService,
-    transactionController, billingCycleController, authService.
-  - ❌ routes/creditCards, routes/billingCycles, routes/transactions,
-    routes/categories, routes/exchangeRate, routes/auth.
+### Fase 5 — Tests + Reportes  [PENDIENTE — ver §11]
 - Reportes pendientes:
   - GET /billing-cycles/:id/summary (mover a Fase 6 / hacer aquí)
   - GET /reports/debt-summary
   - GET /reports/debts-by-contact
 
 ## 5. Convenciones a respetar
-- Servicios reciben `data` y usan `prisma.<model>`. Errores P2025 → "not found".
+- Servicios exponen `create/getAll/getById/update/delete` (no `createX`).
+  Errores P2025 → "not found".
 - Controllers: `req.user.id` del token, try/catch, 201/400/404/500/204.
-- Rutas: express-validator + validateRequest + authenticateToken.
+- Rutas: `express-validator` + `validateRequest` + `authenticateToken`.
+- Middlewares de validación reutilizables:
+  - `existsActiveOwnedByUser(modelName, source, field, customName)` valida que
+    el FK exista, no esté borrado y pertenezca a `req.user.id`.
+  - `requireOwnership(modelName, { notFoundMsg })` valida 404 (no existe) / 403
+    (de otro usuario) y deja el recurso en `req.ownedResource`.
+  - `paramIntId()` valida `:id` entero (requiere `validateRequest`).
+  - `helpers/dateValidators.js`: `isInDateWindow`, `dateAfter`, `maxDaysApart`.
 - Soft delete con `deletedAt`.
 - `amountBase` siempre en PEN (`convertToBase`) para sumar entre divisas.
-- Aliassing de imports: `@/services/...`, `@/helpers/...` (configurado en
+- Aliasing de imports: `@/services/...`, `@/helpers/...` (configurado en
   `jsconfig.json` + `module-alias` en `server.js`).
-- Tests: mocks de `db.getClient()` y de servicios vía `jest.mock` (ver patrón
-  en `__tests__/services/accountService.test.js`).
+- `errorHandler` siempre al final en `app.js` (después de las rutas).
 
 ## 6. Tipo de cambio
 - exchangeRateService.getRateByDate(base, target, date); saveExchangeRate.
-- Job automático: cron `0 6 * * *` en `jobs/exchangeRateJob.js` (fetchFromSunat + save).
-- currencyHelper asume `rate = PEN por 1 unidad de la divisa origen` (se guarda
-  USD→PEN con "buy" de SUNAT para compras, "sell" para ventas). **OJO**: en
-  `exchangeRateController.syncManually` se guarda `sell` de BCRP como rate, lo
-  cual es una inconsistencia con el job que guarda `buy` de SUNAT. Revisar.
-- Falta `convertFromBase(amount, baseCurrency, targetCurrency, date)` para
+- Job automático: cron `0 6 * * *` en `jobs/exchangeRateJob.js`
+  (fetchFromSunat + save con `buy` de SUNAT).
+- currencyHelper asume `rate = PEN por 1 unidad de la divisa origen`.
+- ⚠️ `exchangeRateController.syncManually` guarda el `sell` de **BCRP** pero con
+  `source: "SUNAT"` (inconsistente con el job, que guarda `buy` de SUNAT).
+  Revisar cuál usar (compra para gastos, venta para ingresos).
+- ✅ `getLatestRate` ahora lee `baseCurrency`/`targetCurrency` (antes leía
+  `base`/`target` y el filtro quedaba en undefined).
+- ❌ Falta `convertFromBase(amount, baseCurrency, targetCurrency, date)` para
   armar el resumen del BillingCycle en `bankCurrency`.
 
 ## 7. Capa de soft delete (db.js)
 El singleton de Prisma está extendido con un `$allModels` que sobreescribe
-`findMany`, `findFirst`, `findUnique` y `update` para añadir
-`deletedAt: null` automáticamente al `where`, y sobreescribe `delete` para
-hacer `update deletedAt = now()` en lugar de hard delete.
+`findMany`, `findFirst`, `findUnique` y `update` para añadir `deletedAt: null`
+automáticamente al `where`, y un override a nivel `model` para `delete` que
+hace `update deletedAt = now()` en lugar de hard delete.
 
 Implicaciones:
-- `prisma.x.delete()` ya es soft delete. No hace falta cambiarlo a `update`.
+- `prisma.x.delete()` ya es soft delete.
 - `prisma.x.findMany/findFirst/findUnique/update` ya filtran `deletedAt: null`.
-- Si necesitas BYPASS (ej. admin query), usar `prisma.$queryRaw` o saltarse
-  la extensión. Hoy no hay caso.
-- ⚠️ La extensión NO cascada: borrar un CreditCard vía `prisma.creditCard.delete`
-  no marca sus Accounts ni BillingCycles. Por eso la Fase 6 #1 requiere
-  lógica explícita con `$transaction([updateMany, updateMany, update])`.
+- Si necesitas BYPASS (ej. admin query), usar `prisma.$queryRaw`.
+- ⚠️ La extensión NO cascada: borrar un CreditCard no marca sus Accounts ni
+  BillingCycles. Por eso `creditCardService.delete` usa
+  `$transaction([updateMany, updateMany, update])`.
+- ⚠️ El override de `delete` a nivel `model` devuelve un `Promise` común, NO un
+  `PrismaPromise`; por tanto **no se puede usar dentro de
+  `$transaction([...])`** (error: "All elements of the array need to be Prisma
+  Client promises"). Dentro de transacciones usar `updateMany`/`update`.
+- ⚠️ `paginationHelper.paginate` usa `prisma[model].count`, que NO pasa por la
+  extensión → el `total` incluiría filas con `deletedAt` no nulo. Corregir
+  agregando `deletedAt: null` al `where` del `count` cuando se use.
 
 ## 8. Auth
-- `authService.registerUser(email, password, name)` → bcrypt.hash + prisma.user.create.
-- `authService.loginUser(email, password)` → bcrypt.compare + JWT (2h, secret en .env).
+- `authService.register(email, password, name)` → bcrypt.hash +
+  `prisma.user.create`. Busca duplicado con `where: { email }`.
+- `authService.login(email, password)` → bcrypt.compare + JWT (2h, secret en
+  .env). Payload: `{ id, email, name }`.
 - `middlewares/auth.js` valida `Authorization: Bearer <token>` y setea
-  `req.user = { id, email }` (decoded JWT).
-- ⚠️ El login mete `name` (puede ser string) en el JWT y los controllers
-  hacen `req.user.id` o `req.user.userId`. Revisar consistencia.
-- ⚠️ Casi todos los controllers confían en `req.user.id` pero `update` y
-  `delete` de creditCards/accounts/categories/transactions/billingCycles
-  **no verifican ownership** (no comparan el recurso.userId con req.user.id).
-  Solo `categoryController.getCategories` usa `req.user.userId`. Bug de
-  seguridad transversal.
+  `req.user = { id, email, name }`.
+- ✅ Consistencia: todos los controllers usan `req.user.id`.
+- ✅ El bug transversal de ownership quedó resuelto con `requireOwnership` en
+  las rutas de accounts, categories, transactions, billingCycles y creditCards
+  (404 si no existe, 403 si es de otro usuario).
 
 ## 9. Estado de las migraciones contra la realidad
 Las últimas dos migraciones funcionales son de **2026-09-04**:
@@ -249,10 +240,10 @@ Las últimas dos migraciones funcionales son de **2026-09-04**:
 - `20260904174225_all_new`
 
 Antes hubo otras de 2026-04 (categorías, exchange rates, deletedAt). El
-init original es de 2026-03.
+init original es de 2026-03. No hay migraciones nuevas desde entonces.
 
-No hay archivo `prisma/seed.js` aún (no existe en el árbol). Cuando se
-necesite poblar la BD de desarrollo tras un reset, hay que crearlo desde cero.
+No hay archivo `prisma/seed.js` aún. Cuando se necesite poblar la BD de
+desarrollo tras un reset, hay que crearlo desde cero.
 
 ## 10. Riesgos / notas adicionales
 - **Prisma 7** con `@prisma/adapter-pg`: requiere `DATABASE_URL` apuntando a
@@ -264,3 +255,27 @@ necesite poblar la BD de desarrollo tras un reset, hay que crearlo desde cero.
   a `creditCardId` (recomendado para `InstallmentPlan`).
 - No hay validación de `bankAmount` cuando se paga (el campo es nullable;
   se informa a mano o vía summary endpoint cuando esté hecho).
+- `accountService.js` importa `paginate` de `paginationHelper` pero no lo usa
+  (import muerto). `positiveInt` en `commonRules.js` tampoco se usa.
+
+## 11. Tests (estado real 2026-09-11)
+`npm test` → **4 suites fallan, 35 tests fallan / 3 pasan**. Los tests actuales
+son de ANTES del refactor y referencian métodos que ya no existen
+(`createAccount`, `getAccountById`, `getAccounts`, `updateAccount`,
+`deleteAccount`, `createCategory`, `getCategoryById`, `getCategories`,
+`updateCategory`, `deleteCategory`). Los servicios ahora exponen
+`create/getAll/getById/update/delete`.
+
+Además `__tests__/routes/accounts.test.js` espera validaciones antiguas
+(`userId` en el body, paginación) que ya no aplican (ahora el `userId` sale del
+token y el listado no pagina).
+
+Suites existentes:
+- `__tests__/services/accountService.test.js` (desactualizado)
+- `__tests__/services/categoryService.test.js` (desactualizado)
+- `__tests__/controllers/accountController.test.js` (desactualizado)
+- `__tests__/routes/accounts.test.js` (desactualizado)
+
+Faltan por crear: creditCardService, billingCycleService, transactionService,
+transactionController, billingCycleController, authService, y rutas de
+creditCards/billingCycles/transactions/categories/exchangeRate/auth.

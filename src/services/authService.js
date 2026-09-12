@@ -4,7 +4,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const register = async (email, password, name) => {
-  const existing = await prisma.user.findUnique({ user: { email } });
+  const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) throw new Error("Email ya registrado");
 
   const hashedPassword = await bcrypt.hash(password, 10);
