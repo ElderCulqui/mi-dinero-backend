@@ -1,7 +1,7 @@
 # CONTEXT.md — Mi Dinero Backend (estado de avance)
 
 > Documento de contexto para cualquier modelo/agente que retome este proyecto.
-> Creado el 2026-09-04. Última revisión: 2026-09-11 (revisión de estado + fixes).
+> Creado el 2026-09-04. Última revisión: 2026-09-18 (paginación de transacciones + fixes de ciclos y tarjetas).
 > Stack: Node + Express + Prisma 7 + PostgreSQL.
 
 ## 1. Objetivo
@@ -53,7 +53,7 @@ entre cuentas propias.
                                    (paramIntId, positiveInt, nonNegativeNumeric),
                                    domainValidators.js (noBillingCycleOverlap), index.js
 - jobs/                         -> exchangeRateJob.js
-- __tests__/                    -> services/, controllers/, routes/ (Jest) — ver §11
+- src/__tests__/                -> services/, controllers/, routes/ (Jest) — ver §11
 
 Rutas registradas en `routes/index.js`:
 - /auth, /accounts, /categories, /exchange-rates, /transactions,
@@ -99,6 +99,18 @@ loan_payments, installment_plans, installments.
 7. `exchangeRateController.getLatestRate`: leía `req.query.base/target` pero la
    ruta valida `baseCurrency/targetCurrency` → corregido.
 
+### Correcciones aplicadas el 2026-09-18
+8. `transactionService.getAll`: se añadió paginación opcional con `page` y
+   `pageSize`. Sin `page` devuelve los movimientos más recientes (10 por
+   defecto); con `page` devuelve `data` y metadata de paginación. `pageSize`
+   acepta valores entre 1 y 50.
+9. Se corrigió la condición que detecta si se envió `page` (`!== undefined`).
+10. Se corrigió el nombre de `reassignBillingCycle` para que coincida entre
+    service, controller y ruta.
+11. Se corrigieron errores de BillingCycle/CreditCard: import de
+    `convertFromBase`, filtro `billingCycleId` en el resumen y `periodStart`
+    en los `orderBy`.
+
 ### Fase 6 — Refactor BillingCycle → CreditCard  [CASI CERRADA]
 Schema aplicado (migración `all_new`):
 - Nuevo modelo `CreditCard` (userId, name, brand?, bankCurrency?, isActive,
@@ -117,22 +129,23 @@ Estado de pendientes:
 1. ✅ Cascade de soft delete en `delete` (billingCycles + accounts + tarjeta).
 2. ✅ `getAll(userId, filters)` soporta `isActive` y `name` (contains, insensitive).
 3. ✅ Ownership en GET/:id, PUT y DELETE vía `requireOwnership`.
-4. ❌ Falta un método/endpoint de detalle con `include` de cuentas y ciclos
-   (útil para pantalla de tarjeta).
+4. ✅ GET `/:id` devuelve el detalle con `include` de cuentas y ciclos.
 5. ✅ `create` fuerza `bankCurrency || "PEN"` si llega null/undefined.
 6. ✅ `BillingCycle.creditCardId` requerido y con ownership.
 7. ❌ Sin tests para `creditCardService` ni `billingCycleService`.
-8. ❌ Faltan `GET /credit-cards/:id/billing-cycles?year=YYYY` y
-   **`GET /billing-cycles/:id/summary`** (el más importante: total consolidado
-   `amountBase`, total en `bankCurrency`, lista de transactions del ciclo).
-9. ❌ Sin paginación en el listado de tarjetas (findMany sí filtra `deletedAt`
-   por la extensión §7).
+8. ✅ Existe `GET /credit-cards/:id/billing-cycles?year=YYYY`.
+9. ✅ Existe `GET /billing-cycles/:id/summary`, con total consolidado
+   `amountBase`, total en `bankCurrency` y lista de transactions del ciclo.
+10. ❌ Sin paginación en el listado de tarjetas (findMany sí filtra `deletedAt`
+    por la extensión §7).
 
 ### Fase 2 — Transactions + BillingCycles  [PARCIALMENTE HECHO]
 Archivos:
 - helpers/currencyHelper.js -> convertToBase(amount, currency, date)
-- services/transactionService.js (create, getAll, getById, delete, resolveBillingCycle)
-- services/billingCycleService.js (create, getById, getByUser, delete)
+- services/transactionService.js (create, getAll, getById, update, delete,
+  reassignBillingCycle, resolveBillingCycle)
+- services/billingCycleService.js (create, getById, getByUser, update, delete,
+  getByCreditCard, getSummary)
 - controllers/transactionController.js, billingCycleController.js
 - routes/transactions.js, billingCycles.js (con middleware de validación/ownership)
 
@@ -143,12 +156,17 @@ Estado de pendientes:
    soft delete).
 3. ✅ `getAll` (transactions) soporta filtros type, accountId, categoryId,
    source y rango `from`/`to` (validados en la ruta con `listQueryRules`).
+   También soporta paginación opcional con `page` y `pageSize`, ordenada por
+   `date DESC` e `id DESC`. Sin `page` devuelve un array con los últimos 10
+   movimientos; `pageSize` permite solicitar entre 1 y 50 movimientos.
 4. ✅ `create` valida que la cuenta exista ("Account no existe o fue eliminada")
    y usa `safeParseInt` para `accountId`/`categoryId`/`billingCycleId`.
-5. ❌ Falta método/route de UPDATE para Transaction y BillingCycle.
+5. ✅ Existe método/ruta de UPDATE para Transaction y BillingCycle.
 6. ✅ Sin `console.log` en transactionService.
-7. ❌ No hay endpoint para reasignar `billingCycleId` de una transacción.
+7. ✅ Existe `PATCH /transactions/:id/billing-cycle` para reasignar
+   `billingCycleId`.
 8. ❌ No hay tests de transactionService/transactionController/billingCycleController.
+   Se agregarán posteriormente.
 
 ### Fase 3 — Contacts + TransactionShare + Transfers  [PENDIENTE]
 - CRUD Contact (solo el modelo existe; falta service/route/controller).
@@ -166,9 +184,9 @@ Estado de pendientes:
 
 ### Fase 5 — Tests + Reportes  [PENDIENTE — ver §11]
 - Reportes pendientes:
-  - GET /billing-cycles/:id/summary (mover a Fase 6 / hacer aquí)
   - GET /reports/debt-summary
   - GET /reports/debts-by-contact
+- Los tests de los módulos actuales se agregarán posteriormente.
 
 ## 5. Convenciones a respetar
 - Servicios exponen `create/getAll/getById/update/delete` (no `createX`).
@@ -198,8 +216,8 @@ Estado de pendientes:
   Revisar cuál usar (compra para gastos, venta para ingresos).
 - ✅ `getLatestRate` ahora lee `baseCurrency`/`targetCurrency` (antes leía
   `base`/`target` y el filtro quedaba en undefined).
-- ❌ Falta `convertFromBase(amount, baseCurrency, targetCurrency, date)` para
-  armar el resumen del BillingCycle en `bankCurrency`.
+- ✅ Existe `convertFromBase(amountBase, targetCurrency, date)` para armar el
+  resumen del BillingCycle en `bankCurrency`.
 
 ## 7. Capa de soft delete (db.js)
 El singleton de Prisma está extendido con un `$allModels` que sobreescribe
@@ -218,9 +236,8 @@ Implicaciones:
   `PrismaPromise`; por tanto **no se puede usar dentro de
   `$transaction([...])`** (error: "All elements of the array need to be Prisma
   Client promises"). Dentro de transacciones usar `updateMany`/`update`.
-- ⚠️ `paginationHelper.paginate` usa `prisma[model].count`, que NO pasa por la
-  extensión → el `total` incluiría filas con `deletedAt` no nulo. Corregir
-  agregando `deletedAt: null` al `where` del `count` cuando se use.
+- ✅ `paginationHelper.paginate` agrega `deletedAt: null` al `count`, por lo
+  que el total excluye registros eliminados.
 
 ## 8. Auth
 - `authService.register(email, password, name)` → bcrypt.hash +
@@ -257,25 +274,28 @@ desarrollo tras un reset, hay que crearlo desde cero.
   se informa a mano o vía summary endpoint cuando esté hecho).
 - `accountService.js` importa `paginate` de `paginationHelper` pero no lo usa
   (import muerto). `positiveInt` en `commonRules.js` tampoco se usa.
+- La reasignación de `billingCycleId` valida un ciclo existente; la
+  desasignación explícita con `null` todavía debe definirse/validarse si se
+  necesita ese comportamiento.
 
-## 11. Tests (estado real 2026-09-11)
-`npm test` → **4 suites fallan, 35 tests fallan / 3 pasan**. Los tests actuales
-son de ANTES del refactor y referencian métodos que ya no existen
+## 11. Tests (estado real 2026-09-18)
+Los tests de la funcionalidad actual se agregarán posteriormente. Las suites
+existentes son anteriores al refactor y referencian métodos que ya no existen
 (`createAccount`, `getAccountById`, `getAccounts`, `updateAccount`,
 `deleteAccount`, `createCategory`, `getCategoryById`, `getCategories`,
 `updateCategory`, `deleteCategory`). Los servicios ahora exponen
 `create/getAll/getById/update/delete`.
 
-Además `__tests__/routes/accounts.test.js` espera validaciones antiguas
+Además `src/__tests__/routes/accounts.test.js` espera validaciones antiguas
 (`userId` en el body, paginación) que ya no aplican (ahora el `userId` sale del
-token y el listado no pagina).
+token y el listado de cuentas no pagina).
 
 Suites existentes:
-- `__tests__/services/accountService.test.js` (desactualizado)
-- `__tests__/services/categoryService.test.js` (desactualizado)
-- `__tests__/controllers/accountController.test.js` (desactualizado)
-- `__tests__/routes/accounts.test.js` (desactualizado)
+- `src/__tests__/services/accountService.test.js` (desactualizado)
+- `src/__tests__/services/categoryService.test.js` (desactualizado)
+- `src/__tests__/controllers/accountController.test.js` (desactualizado)
+- `src/__tests__/routes/accounts.test.js` (desactualizado)
 
-Faltan por crear: creditCardService, billingCycleService, transactionService,
-transactionController, billingCycleController, authService, y rutas de
-creditCards/billingCycles/transactions/categories/exchangeRate/auth.
+Faltan por crear o actualizar tests para: creditCardService, billingCycleService,
+transactionService, transactionController, billingCycleController, authService,
+y rutas de creditCards/billingCycles/transactions/categories/exchangeRate/auth.

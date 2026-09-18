@@ -52,7 +52,7 @@ exports.getAll = async (userId, filters = {}) => {
       { id: "desc" },
     ];
 
-    const pageWasSent = filters.page ==! undefined;
+    const pageWasSent = filters.page !== undefined;
     const pageSize = filters.pageSize ? Number(filters.pageSize) : 10;
 
     if (!pageWasSent) {
@@ -117,7 +117,7 @@ exports.update = async (id, data) => {
   }
 };
 
-exports.reassingBillingCycle = async (id, billingCycleId) => {
+exports.reassignBillingCycle = async (id, billingCycleId) => {
   const txnId = parseInt(id);
   const cycleId = safeParseInt(billingCycleId) ?? null;
   
