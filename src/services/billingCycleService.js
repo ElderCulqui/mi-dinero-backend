@@ -1,3 +1,4 @@
+const { convertFromBase } = require("@/helpers/currencyHelper");
 const db = require("../config/db");
 const prisma = db.getClient();
 
@@ -80,7 +81,7 @@ exports.getByCreditCard = async (creditCardId, year) => {
   }
   return prisma.billingCycle.findMany({
     where,
-    orderBy: { periorStart: "asc" },
+    orderBy: { periodStart: "asc" },
   });
 };
 
@@ -93,7 +94,7 @@ exports.getSummary = async (id) => {
   if (!cycle) return null;
 
   const transactions = await prisma.transaction.findMany({
-    where: { billingCycle: cycleId },
+    where: { billingCycleId: cycleId },
     orderBy: { date: "asc" },
     include: { account: true, category: true },
   });

@@ -45,7 +45,7 @@ router.get(
       accounts: { where: { deletedAt: null } },
       billingCycles: {
         where: { deletedAt: null },
-        orderBy: { perioStart: "desc" }
+        orderBy: { periodStart: "desc" }
       },
     },
   }),   

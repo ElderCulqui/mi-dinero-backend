@@ -40,10 +40,20 @@ const reassignRules = [
 ];
 
 const listQueryRules = [
+  query("page")
+    .optional()
+    .isInt({ min: 1})
+    .withMessage("page debe ser un entero mayor o igual a 1"),
+  query("pageSize")
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage("pageSize debe estar entre 1 y 50"),
   query("type").optional().isIn(["ingreso", "egreso"]),
   query("accountId").optional().isInt(),
   query("categoryId").optional().isInt(),
-  query("source").optional().isIn(["manual", "loan", "installment", "reimbursement", "transfer"]),
+  query("source")
+    .optional()
+    .isIn(["manual", "loan", "installment", "reimbursement", "transfer"]),
   query("from").optional().isISO8601(),
   query("to").optional().isISO8601(),
 ];

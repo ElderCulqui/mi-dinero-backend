@@ -1,6 +1,7 @@
 const { convertToBase } = require("../helpers/currencyHelper");
 const db = require("../config/db");
 const { AccountType } = require("@prisma/client");
+const { paginate } = require("@/helpers/paginationHelper");
 const prisma = db.getClient();
 
 const safeParseInt = (v) => {
@@ -45,7 +46,29 @@ exports.getAll = async (userId, filters = {}) => {
       if (filters.from) where.date.gte = new Date(filters.from);
       if (filters.to) where.date.lte = new Date(filters.to);
     }
-    return prisma.transaction.findMany({ where });
+
+    const orderBy = [
+      { date: "desc" },
+      { id: "desc" },
+    ];
+
+    const pageWasSent = filters.page ==! undefined;
+    const pageSize = filters.pageSize ? Number(filters.pageSize) : 10;
+
+    if (!pageWasSent) {
+      return prisma.transaction.findMany({
+        where,
+        orderBy,
+        take: pageSize
+      })
+    }
+
+    const page = Number(filters.page);
+
+    return paginate("transaction", page, pageSize, {
+      where,
+      orderBy,
+    });
 }
 
 exports.getById = async (id) => {
