@@ -1,9 +1,20 @@
-const { body } = require("express-validator");
+const { body, param, query } = require("express-validator");
 const db = require("@/config/db");
 const prisma = db.getClient();
 
-const noBillingCycleOverlap = () =>
-    body("creditCardId").custom(async (creditCardId, { req }) => {
+const locations = { body, param, query }
+
+const noBillingCycleOverlap = ({
+    location = "body",
+    field = "creditCardId",
+} = {}) => {
+    const validador  = locations[location];
+
+    if (!validador) {
+        throw new Error(`Ubicación de validación invalida: ${location}`)
+    }
+
+    return validador(field).custom(async (creditCardId, { req }) => {
         const ccId = parseInt(creditCardId);
         const start = new Date(req.body.periodStart);
         const end = new Date(req.body.periodEnd);
@@ -29,6 +40,7 @@ const noBillingCycleOverlap = () =>
 
         return true;
     });
+};
 
 module.exports = {
     noBillingCycleOverlap

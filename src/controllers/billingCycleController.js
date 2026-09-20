@@ -50,6 +50,16 @@ const getByCreditCard = async (req, res) => {
   }
 }
 
+const createByCreditCard = async (req, res) => {
+  try {
+    const data = { ...req.body, userId: req.user.id, creditCardId: req.params.id };
+    const bc = await billingCycleService.create(data);
+    res.status(201).json(bc);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
 const getSummary = async (req, res) => {
   try {
     const summary = await billingCycleService.getSummary(req.params.id);
@@ -65,6 +75,7 @@ module.exports = {
   getAll,
   getById,
   getByCreditCard,
+  createByCreditCard,
   getSummary,
   destroy,
 };
