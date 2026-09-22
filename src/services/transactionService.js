@@ -10,6 +10,24 @@ const safeParseInt = (v) => {
   return isNaN(n) ? undefined : n;
 };
 
+const transactionRelations = {
+  account: {
+    select: {
+      id: true,
+      name: true,
+      currency: true,
+    },
+  },
+  category: {
+    select: {
+      id: true,
+      name: true,
+      color: true,
+      type: true,
+    },
+  },
+}
+
 exports.create = async (data) => {
     const account = await prisma.account.findUnique({ 
       where: { id: safeParseInt(data.accountId) } 
@@ -31,7 +49,8 @@ exports.create = async (data) => {
         categoryId: safeParseInt(data.categoryId),
         billingCycleId: safeParseInt(data.billingCycleId) ?? billingCycleId,
         amountBase 
-      } 
+      },
+      include: transactionRelations,
     })
 }
 
@@ -59,7 +78,8 @@ exports.getAll = async (userId, filters = {}) => {
       return prisma.transaction.findMany({
         where,
         orderBy,
-        take: pageSize
+        take: pageSize,
+        include: transactionRelations
       })
     }
 
@@ -68,11 +88,15 @@ exports.getAll = async (userId, filters = {}) => {
     return paginate("transaction", page, pageSize, {
       where,
       orderBy,
+      include: transactionRelations,
     });
 }
 
 exports.getById = async (id) => {
-  return prisma.transaction.findUnique({ where: { id: parseInt(id) } });
+  return prisma.transaction.findUnique({ 
+    where: { id: parseInt(id) },
+    include: transactionRelations
+  });
 };
 
 exports.update = async (id, data) => {

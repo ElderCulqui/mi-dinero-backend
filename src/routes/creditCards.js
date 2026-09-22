@@ -27,7 +27,7 @@ const createCycleRules = [
   isInDateWindow("body", "dueDate"),
   dateAfter("body", "periodEnd", "periodStart", { allowEqual: false, label: "periodEnd" }),
   dateAfter("body", "dueDate", "periodEnd", { allowEqual: true }),
-  maxDaysApart("body", "periodEnd", "periodStart", 31),
+  maxDaysApart("body", "periodEnd", "periodStart", 35),
   noBillingCycleOverlap({
     location: "param",
     field: "id"
