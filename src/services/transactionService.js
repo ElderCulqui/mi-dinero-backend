@@ -59,7 +59,11 @@ exports.getAll = async (userId, filters = {}) => {
     if (filters.type) where.type = filters.type;
     if (filters.accountId) where.accountId = safeParseInt(filters.accountId);
     if (filters.categoryId) where.categoryId = safeParseInt(filters.categoryId);
-    if (filters.source) where.source = filters.source;
+    if (filters.source) {
+      where.source = filters.source;
+    } else if (filters.includeTransfers !== "true") {
+      where.source = { not: "transfer" };
+    }
     if (filters.from || filters.to) {
       where.date = {};
       if (filters.from) where.date.gte = new Date(filters.from);

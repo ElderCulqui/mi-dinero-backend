@@ -1,6 +1,7 @@
 const { Router } = require("express");
 const { body, query } = require("express-validator");
 const controller = require("../controllers/transactionController");
+const transactionShareController = require("../controllers/transactionShareController");
 const authenticateToken = require("../middlewares/auth");
 const validateRequest = require("../middlewares/validateRequest");
 const {
@@ -56,6 +57,13 @@ const listQueryRules = [
     .isIn(["manual", "loan", "installment", "reimbursement", "transfer"]),
   query("from").optional().isISO8601(),
   query("to").optional().isISO8601(),
+  query("includeTransfers").optional().isIn(["true", "false"]),
+];
+
+const splitRules = [
+  body("shares").isArray({ min: 1 }).withMessage("shares debe ser un array con al menos 1 elemento"),
+  body("shares.*.contactId").isInt().withMessage("contactId entero"),
+  body("shares.*.amount").isFloat({ min: 0.01 }).withMessage("amount > 0"),
 ];
 
 router.post("/", authenticateToken, createRules, validateRequest, controller.create);
@@ -78,6 +86,23 @@ router.patch(
   validateRequest,
   requireOwnership("transaction", { notFoundMsg: "Transaction not found" }),
   controller.reassignBillingCycle
+);
+router.post(
+  "/:id/shares",
+  authenticateToken,
+  paramIntId(),
+  splitRules,
+  validateRequest,
+  requireOwnership("transaction", { notFoundMsg: "Transaction not found" }),
+  transactionShareController.split
+);
+router.get(
+  "/:id/shares",
+  authenticateToken,
+  paramIntId(),
+  validateRequest,
+  requireOwnership("transaction", { notFoundMsg: "Transaction not found" }),
+  transactionShareController.getByTransaction
 );
 router.get(
   "/:id", 
