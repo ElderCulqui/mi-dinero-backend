@@ -3,24 +3,6 @@ const db = require("@/config/db");
 
 const prisma = db.getClient();
 
-exports.fetchFromBCRP = async () => {
-  try {
-    const urlBCRP =
-      "https://estadisticas.bcrp.gob.pe/estadisticas/series/api/PD04637PD/json";
-    const response = await axios.get(urlBCRP);
-
-    const latestData = response.data.periods[response.data.periods.length - 1];
-    const rate = parseFloat(latestData.values[0]);
-
-    return {
-      buy: rate * 0.998, // Aproximación compra
-      sell: rate * 1.002, // Aproximación venta
-    };
-  } catch (error) {
-    throw new Error("Error fetching exchange rate from BCRP: " + error.message);
-  }
-};
-
 exports.fetchFromSunat = async () => {
   try {
     const urlSunat = "https://api.apis.net.pe/v1/tipo-cambio-sunat";
@@ -42,12 +24,14 @@ exports.saveExchangeRate = async (
   targetCurrency,
   rate,
   source,
+  side = "sell",
 ) => {
   const existingRate = await prisma.exchangeRate.findFirst({
     where: {
       baseCurrency,
       targetCurrency,
       source,
+      side,
       date: {
         gte: new Date(new Date().setHours(0, 0, 0, 0)),
         lt: new Date(new Date().setHours(24, 0, 0, 0)),
@@ -64,20 +48,22 @@ exports.saveExchangeRate = async (
 
   return prisma.exchangeRate.create({
     data: {
-      baseCurrency: baseCurrency,
-      targetCurrency: targetCurrency,
-      source: source,
-      rate: rate,
+      baseCurrency,
+      targetCurrency,
+      source,
+      rate,
+      side,
       date: new Date(),
     },
   });
 };
 
-exports.getLatestExchangeRate = async (baseCurrency, targetCurrency) => {
+exports.getLatestExchangeRate = async (baseCurrency, targetCurrency, side = "sell") => {
   return prisma.exchangeRate.findFirst({
     where: {
       baseCurrency,
       targetCurrency,
+      side,
     },
     orderBy: {
       date: "desc",
@@ -85,11 +71,12 @@ exports.getLatestExchangeRate = async (baseCurrency, targetCurrency) => {
   });
 };
 
-exports.getRateByDate = async (baseCurrency, targetCurrency, date) => {
+exports.getRateByDate = async (baseCurrency, targetCurrency, date, side = "sell") => {
   return prisma.exchangeRate.findFirst({
     where: {
       baseCurrency,
       targetCurrency,
+      side,
       date: {
         gte: new Date(new Date(date).setHours(0, 0, 0, 0)),
         lt: new Date(new Date(date).setHours(24, 0, 0, 0)),

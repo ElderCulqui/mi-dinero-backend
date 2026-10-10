@@ -15,6 +15,7 @@ const syncRules = [
 const latestQueryRules = [
   query("baseCurrency").optional().isIn(["PEN", "USD"]),
   query("targetCurrency").optional().isIn(["PEN", "USD"]),
+  query("side").optional().isIn(["buy", "sell"]),
 ];
 
 router.post("/sync", authenticateToken, syncRules, validateRequest, ctrl.syncManually);
