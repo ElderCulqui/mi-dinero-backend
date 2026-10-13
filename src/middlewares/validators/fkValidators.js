@@ -8,6 +8,8 @@ const formSource = (source) => {
     return body;
 }
 
+const isPresent = (v) => v !== null && v !== undefined && v !== "";
+
 const existsActive = (
     modelName, 
     source = "body", 
@@ -19,6 +21,8 @@ const existsActive = (
     return src(field)
         .isInt().withMessage(`${field} debe ser entero`).bail()
         .custom(async (value) => {
+            if (!isPresent(value)) return true;
+
             const row = await prisma[modelName].findUnique({
                 where: { id: parseInt(value) },
             });
@@ -39,15 +43,17 @@ const existsActiveOwnedByUser = (
     return src(field)
         .isInt().withMessage(`${field} debe ser entero`).bail()
         .custom(async (value, { req }) => {
-             const row = await prisma[modelName].findUnique({
+            if (!isPresent(value)) return true;
+
+            const row = await prisma[modelName].findUnique({
                 where: { id: parseInt(value)},
-             });
-             if (!row) throw new Error(`${customName || modelName} no existe`);
-             if (row.deletedAt) throw new Error(`${customName || modelName} eliminado`);
-             if (row.userId !== req.user.id) {
+            });
+            if (!row) throw new Error(`${customName || modelName} no existe`);
+            if (row.deletedAt) throw new Error(`${customName || modelName} eliminado`);
+            if (row.userId !== req.user.id) {
                 throw new Error(`${customName || modelName} no pertence al usuario`);
-             }
-             return true;
+            }
+            return true;
         });
 }
 

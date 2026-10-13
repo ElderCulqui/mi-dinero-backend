@@ -28,6 +28,7 @@ model User {
   loans         Loan[]
   contacts      Contact[]
   creditCards   CreditCard[]
+  installmentPlans  InstallmentPlan[]
 
   @@map("users")
 }
@@ -112,6 +113,7 @@ model Category {
 
   transactions Transaction[]
   loans        Loan[]
+  installmentPlans  InstallmentPlan[]
 
   @@map("categories")
 }
@@ -264,6 +266,7 @@ model Loan {
   name                String
   currency            Currency
   principal           Float
+  totalAmount         Float
   interestRate        Float?
   termMonths          Int
   startDate           DateTime
@@ -317,7 +320,7 @@ enum PlanStatus {
 model InstallmentPlan {
   id                Int   @id @default(autoincrement())
   userId            Int
-  accountId         Int
+  creditCardId      Int
   categoryId        Int?
   description       String
   currency          Currency
@@ -331,6 +334,9 @@ model InstallmentPlan {
   updatedAt         DateTime  @updatedAt
   deletedAt         DateTime?
 
+  user              User        @relation(fields: [userId], references: [id])
+  creditCard        CreditCard  @relation(fields: [creditCardId], references: [id])
+  category          Category?   @relation(fields: [categoryId], references: [id])
   installments_      Installment[]
 
   @@map("installment_plans")
@@ -370,6 +376,7 @@ model CreditCard {
   user              User @relation(fields: [userId], references: [id])
   accounts          Account[]
   billingCycles     BillingCycle[]
+  installmentPlans  InstallmentPlan[]
 
   @@map("credit_cards")
 }

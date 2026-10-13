@@ -2,6 +2,7 @@ const { convertToBase } = require("../helpers/currencyHelper");
 const db = require("../config/db");
 const { AccountType } = require("@prisma/client");
 const { paginate } = require("@/helpers/paginationHelper");
+const { resolveByAccountAndDate } = require("@/helpers/billingCycleResolver");
 const prisma = db.getClient();
 
 const safeParseInt = (v) => {
@@ -37,7 +38,7 @@ exports.create = async (data) => {
 
     let billingCycleId = null
     if (account.type === AccountType.tarjeta_credito && account.creditCardId) {
-        const cycle = await resolveBillingCycle(account.creditCardId, data.date);
+        const cycle = await resolveByAccountAndDate(account.id, data.date);
         billingCycleId = cycle ? cycle.id : null;
     }
 
@@ -118,7 +119,7 @@ exports.update = async (id, data) => {
 
   let billingCycleId = null;
   if (account.type == AccountType.tarjeta_credito && account.creditCardId) {
-    const cycle = await resolveBillingCycle(account.creditCardId, date)
+    const cycle = await resolveByAccountAndDate(account.id, date)
     billingCycleId = cycle ? cycle.id : null;
   }
   if (data.billingCycleId !== undefined) {
@@ -171,13 +172,3 @@ exports.delete = async (id) => {
     throw error;
   }
 };
-
-async function resolveBillingCycle(creditCardId, date) {
-  return prisma.billingCycle.findFirst({
-    where: {
-      creditCardId,
-      periodStart: { lte: date },
-      periodEnd: { gte: date }
-    },
-  });
-}

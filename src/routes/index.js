@@ -9,6 +9,8 @@ const creditCardsRoutes = require("./creditCards");
 const contactsRoutes = require("./contacts");
 const transactionSharesRoutes = require("./transactionShares");
 const transfersRoutes = require("./transfers");
+const loansRouter = require("./loans");
+const installmentPlansRouter = require("./installmentPlans");
 
 const router = Router();
 
@@ -22,5 +24,7 @@ router.use("/credit-cards", creditCardsRoutes);
 router.use("/contacts", contactsRoutes);
 router.use("/transaction-shares", transactionSharesRoutes);
 router.use("/transfers", transfersRoutes);
+router.use("/loans", loansRouter);
+router.use("/installment-plans", installmentPlansRouter);
 
 module.exports = router;
