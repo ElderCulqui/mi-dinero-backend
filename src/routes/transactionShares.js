@@ -4,7 +4,6 @@ const controller = require("../controllers/transactionShareController");
 const authenticateToken = require("../middlewares/auth");
 const validateRequest = require("../middlewares/validateRequest");
 const {
-  requireOwnership,
   paramIntId,
   existsActiveOwnedByUser,
 } = require("../middlewares/validators");
@@ -32,7 +31,8 @@ router.patch(
   paramIntId(),
   collectRules,
   validateRequest,
-  requireOwnership("transactionShare", { notFoundMsg: "TransactionShare not found" }),
+  // TransactionShare no tiene userId: markCollected valida la propiedad
+  // a través de la transacción padre y de la cuenta destino.
   controller.markCollected
 );
 

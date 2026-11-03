@@ -12,6 +12,24 @@ const create = async (req, res) => {
 
 const getById = async (req, res) => res.json(req.ownedResource);
 
+const getSummary = async (req, res) => {
+  try {
+    const summary = await contactService.getSharesSummary(req.params.id);
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getShares = async (req, res) => {
+  try {
+    const shares = await contactService.getShares(req.params.id, req.query);
+    res.json(shares);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 const getAll = async (req, res) => {
   try {
     const contacts = await contactService.getAll(req.user.id);
@@ -45,6 +63,8 @@ const destroy = async (req, res) => {
 module.exports = {
   create,
   getById,
+  getSummary,
+  getShares,
   getAll,
   update,
   destroy,
