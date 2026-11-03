@@ -15,8 +15,14 @@ const router = Router();
 const rules = [
   existsActiveOwnedByUser("account", "body", "fromAccountId", "Cuenta origen"),
   existsActiveOwnedByUser("account", "body", "toAccountId", "Cuenta destino"),
-  body("fromAmount").isFloat({ min: 0.01 }).withMessage("fromAmount numérico > 0"),
-  body("toAmount").optional({ nullable: true }).isFloat({ min: 0.01 }),
+  body("fromAmount")
+      .isString()
+      .matches(/^[1-9]\d*$/)
+      .withMessage("fromAmount numérico > 0"),
+  body("toAmount")
+      .optional({ nullable: true })
+      .isString()
+      .matches(/^[1-9]\d*$/),
   body("rate").optional({ nullable: true }).isFloat({ min: 0 }),
   body("date").isISO8601().withMessage("date ISO8601"),
   isInDateWindow("body", "date"),

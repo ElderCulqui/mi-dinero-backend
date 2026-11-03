@@ -36,11 +36,17 @@ const existsActiveOwnedByUser = (
     modelName, 
     source = "body", 
     field = `${modelName}Id`, 
-    customName
+    customName,
+    options = {}
 ) => {
     const src = formSource(source);
+    let chain = src(field);
 
-    return src(field)
+    if (options.optional) {
+        chain = chain.optional({ nullable: true, checkFalsy: true });
+    }
+
+    return chain
         .isInt().withMessage(`${field} debe ser entero`).bail()
         .custom(async (value, { req }) => {
             if (!isPresent(value)) return true;

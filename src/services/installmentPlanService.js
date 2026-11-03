@@ -3,6 +3,7 @@ const prisma = db.getClient();
 const { generateInstallmentSchedule, recalculateStatus, round2 } = require("@/helpers/scheduleCalculator");
 const { resolveByAccountAndDate } = require("@/helpers/billingCycleResolver");
 const { convertToBase } = require("@/helpers/currencyHelper");
+const { parseMinor } = require("@/helpers/money");
 
 const includeInstallments = {
     installments_: { orderBy: { number: "asc" } },
@@ -53,13 +54,14 @@ const create = async (userId, data) => {
     const { card } = await resolveCardAndAccount(userId, data.creditCardId);
     await validateCategory(userId, data.categoryId);
 
-    const amountPerInstallment = round2(Number(data.totalAmount) / Number(data.installments));
+    const totalAmount = parseMinor(data.totalAmount);
+    const count = Number(data.installments);
     const schedule = generateInstallmentSchedule({
         firstDueDate: new Date(data.firstDueDate),
         installments: data.installments,
-        amountPerInstallment,
-        totalAmount: data.totalAmount,
+        totalAmount,
     });
+    const amountPerInstallment = totalAmount / BigInt(count);
 
     return prisma.installmentPlan.create({
         data: {
@@ -68,8 +70,8 @@ const create = async (userId, data) => {
             categoryId: data.categoryId ? Number(data.categoryId) : null,
             description: data.description,
             currency: data.currency ?? card.bankCurrency,
-            totalAmount: data.totalAmount,
-            installments: Number(data.installments),
+            totalAmount,
+            installments: count,
             amountPerInstallment,
             startDate: new Date(data.startDate),
             firstDueDate: new Date(data.firstDueDate),
@@ -101,7 +103,7 @@ const getById = async (userId, id) => {
 
 const update = async (userId, id, data) => {
   const plan = await getById(userId, id);
-  const hasPaid = plan.installments_.some((i) => Number(i.paidAmount) > 0);
+  const hasPaid = plan.installments_.some((i) => i.paidAmount > 0n);
   if (hasPaid) {
     const err = new Error("Con cuotas pagadas no se puede modificar el plan");
     err.status = 400;
@@ -131,14 +133,14 @@ const remove = async (userId, id) => {
 
 const getSummary = async (userId, id) => {
   const plan = await getById(userId, id);
-  const total = Number(plan.totalAmount);
-  const paid = plan.installments_.reduce((s, i) => s + Number(i.paidAmount), 0);
+  const total = plan.totalAmount;
+  const paid = plan.installments_.reduce((s, i) => s + i.paidAmount, 0n);
   return {
     planId: plan.id,
     totalAmount: total,
-    paidAmount: round2(paid),
-    pendingAmount: round2(total - paid),
-    progress: total > 0 ? round2((paid / total) * 100) : 0,
+    paidAmount: paid,
+    pendingAmount: total - paid,
+    progress: total > 0n ? round2((Number(paid) / Number(total)) * 100) : 0,
     status: plan.status,
     installmentsCount: plan.installments_.length,
     paidInstallments: plan.installments_.filter((i) => i.status === "pagado").length,
@@ -153,15 +155,15 @@ const payInstallment = async (userId, planId, installmentId, data) => {
     err.status = 404;
     throw err;
   }
-  const amount = Number(data.amount);
-  if (!Number.isFinite(amount) || amount <= 0) {
+  const amount = parseMinor(data.amount);
+  if (amount <= 0n) {
     const err = new Error("Monto debe ser > 0");
     err.status = 400;
     throw err;
   }
-  const remaining = Number(installment.amount) - Number(installment.paidAmount);
-  if (amount > remaining + 0.0001) {
-    const err = new Error(`Monto excede lo pendiente (${remaining.toFixed(2)})`);
+  const remaining = installment.amount - installment.paidAmount;
+  if (amount > remaining) {
+    const err = new Error(`Monto excede lo pendiente (${remaining} centavos)`);
     err.status = 400;
     throw err;
   }
@@ -184,7 +186,6 @@ const payInstallment = async (userId, planId, installmentId, data) => {
         categoryId: data.categoryId ? Number(data.categoryId) : plan.categoryId ?? null,
         type: "egreso",
         amount,
-        currency: account.currency,
         amountBase: await convertToBase(amount, account.currency, date),
         date,
         description,
@@ -193,7 +194,7 @@ const payInstallment = async (userId, planId, installmentId, data) => {
         installmentId: installment.id,
       },
     });
-    const newPaid = round2(Number(installment.paidAmount) + amount);
+    const newPaid = installment.paidAmount + amount;
     const newStatus = recalculateStatus(installment.amount, newPaid);
     const updated = await tx.installment.update({
       where: { id: installment.id },

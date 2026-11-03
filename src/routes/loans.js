@@ -18,13 +18,19 @@ router.post(
   [
     body("name").isString().isLength({ min: 1, max: 100 }),
     body("currency").optional({ nullable: true }).isIn(["PEN", "USD"]),
-    body("principal").isFloat({ gt: 0 }).toFloat(),
-    body("totalAmount").isFloat({ gt: 0 }).toFloat(),
+    body("principal")
+      .isString()
+      .matches(/^[1-9]\d*$/)
+      .withMessage("principal debe ser una cadena entera positiva en unidades menores"),
+    body("totalAmount")
+      .isString()
+      .matches(/^[1-9]\d*$/)
+      .withMessage("totalAmount debe ser una cadena entera positiva en unidades menores"),
     body("interestRate").optional({ nullable: true }).isFloat({ min: 0, max: 9.9999 }).toFloat(),
     body("termMonths").isInt({ gt: 0, lt: 1000 }),
     body("startDate").isISO8601().withMessage("startDate debe ser fecha ISO válida"),
-    existsActiveOwnedByUser("account", "body", "accountId", "Account"),
-    existsActiveOwnedByUser("category", "body", "categoryId", "Category").optional({ nullable: true, checkFalsy: true }),
+    existsActiveOwnedByUser("account", "body", "accountId", "Account", { optional: true }),
+    existsActiveOwnedByUser("category", "body", "categoryId", "Category", { optional: true }),
     body("description").optional({ nullable: true }).isString().isLength({ max: 500 }),
   ],
   validate,
@@ -40,8 +46,8 @@ router.put(
     paramIntId("id"),
     body("name").optional({ nullable: true }).isString().isLength({ min: 1, max: 100 }),
     body("description").optional({ nullable: true }).isString().isLength({ max: 500 }),
-    existsActiveOwnedByUser("account", "body", "accountId", "Account").optional({ nullable: true, checkFalsy: true }),
-    existsActiveOwnedByUser("category", "body", "categoryId", "Category").optional({ nullable: true, checkFalsy: true }),
+    existsActiveOwnedByUser("account", "body", "accountId", "Account", { optional: true }),
+    existsActiveOwnedByUser("category", "body", "categoryId", "Category", { optional: true }),
   ],
   validate,
   ctrl.update
@@ -54,10 +60,13 @@ router.post(
   [
     paramIntId("id"),
     paramIntId("paymentId"),
-    body("amount").isFloat({ gt: 0 }).toFloat(),
+    body("amount")
+      .isString()
+      .matches(/^[1-9]\d*$/)
+      .withMessage("amount debe ser una cadena entera positiva en unidades menores"),
     body("date").optional({ nullable: true }).isISO8601(),
-    existsActiveOwnedByUser("account", "body", "accountId", "Account").optional({ nullable: true, checkFalsy: true }),
-    existsActiveOwnedByUser("category", "body", "categoryId", "Category").optional({ nullable: true, checkFalsy: true }),
+    existsActiveOwnedByUser("account", "body", "accountId", "Account", { optional: true }),
+    existsActiveOwnedByUser("category", "body", "categoryId", "Category", { optional: true }),
     body("description").optional({ nullable: true }).isString().isLength({ max: 500 }),
   ],
   validate,

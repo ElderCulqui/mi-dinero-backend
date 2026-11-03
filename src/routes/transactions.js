@@ -16,7 +16,10 @@ const router = Router();
 const createRules = [
   existsActiveOwnedByUser("account", "body", "accountId", "Account"),
   body("type").isIn(["ingreso", "egreso"]),
-  body("amount").isFloat({ min: 0 }).withMessage("amount numérico ≥ 0"),
+  body("amount")
+    .isString()
+    .matches(/^(0|[1-9]\d*)$/)
+    .withMessage("amount debe ser una cadena entera positiva mayor o igual a 0"),
   body("date").isISO8601(),
   isInDateWindow("body", "date"),
   body("categoryId").optional().isInt(),
@@ -26,7 +29,11 @@ const createRules = [
 
 const updateRules = [
   body("type").optional().isIn(["ingreso", "egreso"]),
-  body("amount").optional().isFloat({ min: 0 }),
+  body("amount")
+    .optional()
+    .isString()
+    .matches(/^(0|[1-9]\d*)$/)
+    .withMessage("amount debe ser una cadena entera positiva mayor o igual a 0"),
   body("date").optional().isISO8601(),
   body("categoryId").optional({ nullable: true }).isInt(),
   body("accountId").optional().isInt(),
@@ -63,7 +70,10 @@ const listQueryRules = [
 const splitRules = [
   body("shares").isArray({ min: 1 }).withMessage("shares debe ser un array con al menos 1 elemento"),
   body("shares.*.contactId").isInt().withMessage("contactId entero"),
-  body("shares.*.amount").isFloat({ min: 0.01 }).withMessage("amount > 0"),
+  body("shares.*.amount")
+      .isString()
+      .matches(/^[1-9]\d*$/)
+      .withMessage("amount > 0"),
 ];
 
 router.post("/", authenticateToken, createRules, validateRequest, controller.create);

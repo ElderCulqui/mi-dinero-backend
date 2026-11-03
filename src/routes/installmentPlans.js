@@ -17,11 +17,14 @@ router.post(
     existsActiveOwnedByUser("creditCard", "body", "creditCardId", "CreditCard"),
     body("description").isString().isLength({ min: 1, max: 255 }),
     body("currency").optional({ nullable: true }).isIn(["PEN", "USD"]),
-    body("totalAmount").isFloat({ gt: 0 }).toFloat(),
+    body("totalAmount")
+      .isString()
+      .matches(/^[1-9]\d*$/)
+      .withMessage("totalAmount debe ser una cadena entera positiva en unidades menores"),
     body("installments").isInt({ gt: 0, lt: 1000 }),
     body("startDate").isISO8601(),
     body("firstDueDate").isISO8601(),
-    existsActiveOwnedByUser("category", "body", "categoryId", "Category").optional({ nullable: true, checkFalsy: true }),
+    existsActiveOwnedByUser("category", "body", "categoryId", "Category", { optional: true }),
   ],
   validate,
   ctrl.create
@@ -35,7 +38,7 @@ router.put(
   [
     paramIntId("id"),
     body("description").optional({ nullable: true }).isString().isLength({ min: 1, max: 255 }),
-    existsActiveOwnedByUser("category", "body", "categoryId", "Category").optional({ nullable: true, checkFalsy: true }),
+    existsActiveOwnedByUser("category", "body", "categoryId", "Category", { optional: true }),
   ],
   validate,
   ctrl.update
@@ -48,9 +51,12 @@ router.post(
   [
     paramIntId("id"),
     paramIntId("installmentId"),
-    body("amount").isFloat({ gt: 0 }).toFloat(),
+    body("amount")
+      .isString()
+      .matches(/^[1-9]\d*$/)
+      .withMessage("amount debe ser una cadena entera positiva en unidades menores"),
     body("date").optional({ nullable: true }).isISO8601(),
-    existsActiveOwnedByUser("category", "body", "categoryId", "Category").optional({ nullable: true, checkFalsy: true }),
+    existsActiveOwnedByUser("category", "body", "categoryId", "Category", { optional: true }),
     body("description").optional({ nullable: true }).isString().isLength({ max: 500 }),
   ],
   validate,

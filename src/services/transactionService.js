@@ -1,4 +1,5 @@
 const { convertToBase } = require("../helpers/currencyHelper");
+const { parseMinor } = require("../helpers/money");
 const db = require("../config/db");
 const { AccountType } = require("@prisma/client");
 const { paginate } = require("@/helpers/paginationHelper");
@@ -34,7 +35,8 @@ exports.create = async (data) => {
       where: { id: safeParseInt(data.accountId) } 
     })
     if (!account) throw new Error("Account no existe o fue eliminada");
-    const amountBase = await convertToBase(data.amount, account.currency, data.date)
+    const amount = parseMinor(data.amount);
+    const amountBase = await convertToBase(amount, account.currency, data.date)
 
     let billingCycleId = null
     if (account.type === AccountType.tarjeta_credito && account.creditCardId) {
@@ -45,6 +47,7 @@ exports.create = async (data) => {
     return prisma.transaction.create({ 
       data: { 
         ...data, 
+        amount,
         userId: safeParseInt(data.userId),
         accountId: safeParseInt(data.accountId),
         categoryId: safeParseInt(data.categoryId),
@@ -113,7 +116,7 @@ exports.update = async (id, data) => {
   const account = await prisma.account.findUnique({ where: { id: accountId }});
   if (!account) throw new Error("Account no existe o fue eliminada");
 
-  const amount = data.amount !== undefined ? Number(data.amount) : current.amount;
+  const amount = data.amount !== undefined ? parseMinor(data.amount) : current.amount;
   const date = data.date !== undefined ? new Date(data.date) : current.date;
   const amountBase = await convertToBase(amount, account.currency, date);
 

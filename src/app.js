@@ -18,6 +18,10 @@ const corsOptions = {
   },
 };
 
+app.set("json replacer", (_key, value) =>
+  typeof value === "bigint" ? value.toString() : value
+);
+
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(LoggerMiddleware);

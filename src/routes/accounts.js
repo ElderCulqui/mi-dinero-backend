@@ -23,7 +23,14 @@ const rules = [
     .if(body("type").equals("tarjeta_credito"))
     .notEmpty()
     .withMessage("Credit limit required for credit card accounts")
-    .isFloat({ min: 0 }),
+    .isString()
+    .matches(/^(0|[1-9]\d*)$/)
+    .withMessage("creditLimit debe ser una cadena entera en unidades menores"),
+  body("balance")
+    .optional()
+    .isString()
+    .matches(/^-?\d+$/)
+    .withMessage("balance debe ser una cadena entera en unidades menores"),
   body("isDefault").optional().isBoolean(),
   body("currency").optional().isIn(["PEN", "USD"]),
 ];

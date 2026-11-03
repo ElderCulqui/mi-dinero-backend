@@ -15,8 +15,9 @@ const router = Router();
 const collectRules = [
   existsActiveOwnedByUser("account", "body", "accountId", "Account"),
   body("settlementAmount")
-    .isFloat({ min: 0.01 })
-    .withMessage("settlementAmount numérico > 0"),
+    .isString()
+    .matches(/^[1-9]\d*$/)
+    .withMessage("settlementAmount debe ser una cadena entera positiva en unidades menores"),
   body("settlementCurrency").optional().isIn(["PEN", "USD"]),
   body("settlementRate").optional().isFloat({ min: 0 }),
   body("date").optional().isISO8601(),

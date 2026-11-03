@@ -21,7 +21,11 @@ const createCycleRules = [
   body("periodStart").isISO8601().withMessage("periodStart ISO8601"),
   body("periodEnd").isISO8601().withMessage("periodEnd ISO8601"),
   body("dueDate").isISO8601().withMessage("dueDate ISO8601"),
-  body("bankAmount").optional().isFloat({ min: 0 }).withMessage("bankAmount numérico ≥ 0"),
+  body("bankAmount")
+    .optional({ nullable: true })
+    .isString()
+    .matches(/^(0|[1-9]\d*)$/)
+    .withMessage("bankAmount debe ser una cadena entera en unidades menores"),
   isInDateWindow("body", "periodStart"),
   isInDateWindow("body", "periodEnd"),
   isInDateWindow("body", "dueDate"),

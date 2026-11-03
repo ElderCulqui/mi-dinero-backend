@@ -1,5 +1,6 @@
 const db = require("@/config/db");
 const { convertToBase } = require("@/helpers/currencyHelper");
+const { parseMinor, multiplyMinorByRate, divideMinorByRate } = require("@/helpers/money");
 const { getRateByDate } = require("@/services/exchangeRateService");
 const prisma = db.getClient();
 
@@ -7,11 +8,11 @@ const toInt = (v) =>
   v === undefined || v === null || v === "" ? undefined : parseInt(v);
 
 async function getCrossRate(from, to, date) {
-    if (from === to) return 1;
+    if (from === to) return { rate: 1, multiply: true };
     const direct = await getRateByDate(from, to, date, "sell");
-    if (direct) return direct.rate;
+    if (direct) return { rate: direct.rate, multiply: true };
     const inverse = await getRateByDate(to, from, date, "sell");
-    if (inverse) return 1 / inverse.rate;
+    if (inverse) return { rate: inverse.rate, multiply: false };
 
     throw new Error(`No hay tipo de cambio ${from}->${to} para la fecha`);
 }
@@ -31,7 +32,7 @@ async function resolveTransfer(data, userId) {
         throw new Error("Las cuentas origen y destino deben ser distintas");
 
     const date = new Date(data.date);
-    const fromAmount = Number(data.fromAmount);
+    const fromAmount = parseMinor(data.fromAmount);
     const fromCurrency = fromAccount.currency;
     const toCurrency = toAccount.currency;
 
@@ -44,11 +45,16 @@ async function resolveTransfer(data, userId) {
         toAmount = fromAmount;
         rate = rate ?? 1;
     } else if (data.toAmount !== undefined && data.toAmount !== null && data.toAmount !== "") {
-        toAmount = Number(data.toAmount);
-        rate = rate ?? toAmount / fromAmount;
+        toAmount = parseMinor(data.toAmount);
+        rate = rate ?? Number(toAmount) / Number(fromAmount);
+    } else if (rate !== null) {
+        toAmount = multiplyMinorByRate(fromAmount, rate);
     } else {
-        rate = rate ?? (await getCrossRate(fromCurrency, toCurrency, date));
-        toAmount = fromAmount * rate;
+        const cross = await getCrossRate(fromCurrency, toCurrency, date);
+        rate = cross.rate;
+        toAmount = cross.multiply
+            ? multiplyMinorByRate(fromAmount, rate)
+            : divideMinorByRate(fromAmount, rate);
     }
 
     const fromAmountBase = await convertToBase(fromAmount, fromCurrency, date);
@@ -221,4 +227,3 @@ exports.delete = async (id) => {
     }),
   ]);
 };
-

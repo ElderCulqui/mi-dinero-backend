@@ -2,6 +2,7 @@ const db = require("@/config/db");
 const prisma = db.getClient();
 const { generateLoanSchedule, recalculateStatus, round2 } = require("@/helpers/scheduleCalculator");
 const { convertToBase } = require("@/helpers/currencyHelper");
+const { parseMinor } = require("@/helpers/money");
 
 const includePayments = {
     payments: { orderBy: { number: "asc" } },
@@ -48,8 +49,8 @@ const create = async (userId, data) => {
             userId,
             name: data.name,
             currency: data.currency ?? account?.currency ?? "PEN",
-            principal: data.principal,
-            totalAmount: Number(data.totalAmount),
+            principal: parseMinor(data.principal),
+            totalAmount: parseMinor(data.totalAmount),
             interestRate: data.interestRate ?? null,
             termMonths: Number(data.termMonths),
             startDate: new Date(data.startDate),
@@ -86,7 +87,7 @@ const getById = async (userId, id) => {
 
 const update = async (userId, id, data) => {
     const loan = await getById(userId, id);
-    const hasPaid = loan.payments.some((p) => Number(p.paidAmount) > 0);
+    const hasPaid = loan.payments.some((p) => p.paidAmount > 0n);
     if (hasPaid) {
         const err = new Error("Con pagos realizados no se puede modificar el préstamo");
         err.status = 400;
@@ -118,14 +119,14 @@ const remove = async (userId, id) => {
 
 const getSummary = async (userId, id) => {
     const loan = await getById(userId, id);
-    const total = Number(loan.totalAmount);
-    const paid = loan.payments.reduce((s, p) => s + Number(p.paidAmount), 0);
+    const total = loan.totalAmount;
+    const paid = loan.payments.reduce((s, p) => s + p.paidAmount, 0n);
     return {
         loanId: loan.id,
         totalAmount: total,
-        paidAmount: round2(paid),
-        pendingAmount: round2(total - paid),
-        progress: total > 0 ? round2((paid / total) * 100) : 0,
+        paidAmount: paid,
+        pendingAmount: total - paid,
+        progress: total > 0n ? round2((Number(paid) / Number(total)) * 100) : 0,
         status: loan.status,
         installmentsCount: loan.payments.length,
         paidInstallments: loan.payments.filter((p) => p.status === "pagado").length,
@@ -141,16 +142,16 @@ const payPayment = async (userId, loanId, paymentId, data) => {
         throw err;
     }
     
-    const amount = Number(data.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    const amount = parseMinor(data.amount);
+    if (amount <= 0n) {
         const err = new Error("Monto debe ser > 0");
         err.status = 400;
         throw err;
     }
 
-    const remaining = Number(payment.amount) - Number(payment.paidAmount);
-    if (amount > remaining + 0.0001) {
-        const err = new Error(`Monto excede lo pendiente (${remaining.toFixed(2)})`);
+    const remaining = payment.amount - payment.paidAmount;
+    if (amount > remaining) {
+        const err = new Error(`Monto excede lo pendiente (${remaining} centavos)`);
         err.status = 400;
         throw err;
     }
@@ -177,7 +178,6 @@ const payPayment = async (userId, loanId, paymentId, data) => {
                 categoryId: data.categoryId ? Number(data.categoryId) : loan.categoryId ?? null,
                 type: "egreso",
                 amount,
-                currency: targetAccount.currency,
                 amountBase: await convertToBase(amount, targetAccount.currency, date),
                 date,
                 description,
@@ -185,7 +185,7 @@ const payPayment = async (userId, loanId, paymentId, data) => {
                 loanPaymentId: payment.id,
             },
         });
-        const newPaid = round2(Number(payment.paidAmount) + amount);
+        const newPaid = payment.paidAmount + amount;
         const newStatus = recalculateStatus(payment.amount, newPaid);
         const updatePayment = await tx.loanPayment.update({
             where: { id: payment.id },

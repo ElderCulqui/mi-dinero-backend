@@ -1,5 +1,6 @@
 const db = require("@/config/db");
 const { convertToBase } = require("@/helpers/currencyHelper");
+const { parseMinor } = require("@/helpers/money");
 const prisma = db.getClient();
 
 const toInt = (v) =>
@@ -18,12 +19,12 @@ exports.split = async (transactionId, userId, shares) => {
 
     const parsed = shares.map((s) => ({
         contactId: toInt(s.contactId),
-        amount: Number(s.amount)
+        amount: parseMinor(s.amount),
     }));
 
     if (new Set(parsed.map((s) => s.contactId)).size !== parsed.length)
         throw new Error("No se puede repetir un contacto en el reparto");
-    if (parsed.some((s) => !(s.amount > 0)))
+    if (parsed.some((s) => !(s.amount > 0n)))
         throw new Error("Cada share debe tener un monto > 0");
 
     const contactIds = parsed.map((s) => s.contactId);
@@ -33,8 +34,8 @@ exports.split = async (transactionId, userId, shares) => {
     if (contacts.length !== contactIds.length)
         throw new Error("Algún contacto no existe o no pertenece al usuario");
     
-    const sum = parsed.reduce((acc, s) => acc + s.amount, 0);
-    if (sum > txn.amount + 1e-9)
+    const sum = parsed.reduce((acc, s) => acc + s.amount, 0n);
+    if (sum > txn.amount)
         throw new Error("La suma de los shares no puede superar el monto de la transacción");
 
     const now = new Date();
@@ -84,7 +85,7 @@ exports.markCollected = async (shareId, data) => {
     if (account.userId !== userId) throw new Error("No autorizado");
 
     const settlementCurrency = data.settlementCurrency || account.currency;
-    const settlementAmount = Number(data.settlementAmount);
+    const settlementAmount = parseMinor(data.settlementAmount);
     const hasRate = 
         data.settlementRate !== undefined &&
         data.settlementRate !== null &&

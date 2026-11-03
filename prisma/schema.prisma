@@ -80,8 +80,8 @@ model Account {
   name        String
   type        AccountType
   currency    Currency    @default(PEN)
-  balance     Float       @default(0)
-  creditLimit Float?
+  balance     BigInt       @default(0)
+  creditLimit BigInt?
   isActive    Boolean     @default(true)
   isDefault   Boolean     @default(false)
   createdAt   DateTime    @default(now())
@@ -145,7 +145,7 @@ model BillingCycle {
   periodStart    DateTime
   periodEnd      DateTime
   dueDate        DateTime
-  bankAmount     Float?
+  bankAmount     BigInt?
   status         CycleStatus @default(abierto)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -164,8 +164,8 @@ model Transaction {
   accountId     Int
   categoryId    Int?
   type          TransactionType
-  amount        Float
-  amountBase    Float
+  amount        BigInt
+  amountBase    BigInt
   description   String?
   date          DateTime
   status        TxnStatus  @default(ejecutado)
@@ -196,8 +196,8 @@ model Transfer {
   userId          Int
   fromAccountId   Int
   toAccountId     Int
-  fromAmount      Float
-  toAmount        Float
+  fromAmount      BigInt
+  toAmount        BigInt
   fromCurrency    Currency
   toCurrency      Currency
   rate            Float?
@@ -237,12 +237,12 @@ model TransactionShare {
   id                  Int   @id @default(autoincrement())
   transactionId       Int
   contactId           Int
-  amount              Float //Lo que debe, en la divisa de la transaccion
+  amount              BigInt //Lo que debe, en la divisa de la transaccion
   status              ShareStatus
   paidDate            DateTime?
   settlementRate      Float? // TC usado para cobrar (PEN por USD, etc.)
   settlementCurrency  Currency? // divisa en que te pagó (ej. PEN)
-  settlementAmount    Float? // monto recibido (en settlementCurrency)
+  settlementAmount    BigInt? // monto recibido (en settlementCurrency)
   reimbursementTxnId  Int?  // Transaction ingreso real del cobro
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
@@ -265,8 +265,8 @@ model Loan {
   userId              Int
   name                String
   currency            Currency
-  principal           Float
-  totalAmount         Float
+  principal           BigInt
+  totalAmount         BigInt
   interestRate        Float?
   termMonths          Int
   startDate           DateTime
@@ -298,8 +298,8 @@ model LoanPayment {
   loanId              Int
   number              Int
   dueDate             DateTime
-  amount              Float   // cuota esperada (en divisa del préstamo)
-  paidAmount          Float  @default(0) // acumulado de pagos (amortización parcial/total)
+  amount              BigInt   // cuota esperada (en divisa del préstamo)
+  paidAmount          BigInt  @default(0) // acumulado de pagos (amortización parcial/total)
   status              PayStatus @default(pendiente)
   paidDate            DateTime?
   createdAt           DateTime  @default(now())
@@ -324,9 +324,9 @@ model InstallmentPlan {
   categoryId        Int?
   description       String
   currency          Currency
-  totalAmount       Float
+  totalAmount       BigInt
   installments      Int
-  amountPerInstallment  Float
+  amountPerInstallment  BigInt
   startDate         DateTime
   firstDueDate      DateTime
   status            PlanStatus    @default(activo)
@@ -347,8 +347,8 @@ model Installment {
   installmentPlanId Int
   number            Int
   dueDate           DateTime
-  amount            Float   // couta esperada
-  paidAmount        Float @default(0)
+  amount            BigInt   // couta esperada
+  paidAmount        BigInt @default(0)
   status            PayStatus @default(pendiente)
   paidDate          DateTime?
   createdAt         DateTime  @default(now())

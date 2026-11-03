@@ -1,9 +1,13 @@
 const { convertFromBase } = require("@/helpers/currencyHelper");
+const { parseMinor } = require("@/helpers/money");
 const db = require("../config/db");
 const prisma = db.getClient();
 
 exports.create = async (data) => {
     data.creditCardId = parseInt(data.creditCardId);
+    if (data.bankAmount !== undefined && data.bankAmount !== null && data.bankAmount !== "") {
+        data.bankAmount = parseMinor(data.bankAmount);
+    }
 
     return prisma.billingCycle.create({ data })
 }
@@ -47,7 +51,9 @@ exports.update = async (id, data) => {
         periodStart,
         periodEnd,
         dueDate,
-        bankAmount: data.bankAmount !== undefined ? Number(data.bankAmount) : undefined,
+        bankAmount: data.bankAmount !== undefined
+          ? (data.bankAmount === null ? null : parseMinor(data.bankAmount))
+          : undefined,
         status: data.status,
       },
     });
@@ -99,21 +105,19 @@ exports.getSummary = async (id) => {
     include: { account: true, category: true },
   });
 
-  const totalAmountBase = transactions.reduce((sum, t) => sum + t.amountBase, 0);
+  const totalAmountBase = transactions.reduce((sum, t) => sum + t.amountBase, 0n);
   const bankCurrency = cycle.creditCard.bankCurrency || "PEN";
 
-  let totalBankAmount = 0;
+  let totalBankAmount = 0n;
   for (const t of transactions) {
     totalBankAmount += await convertFromBase(t.amountBase, bankCurrency, t.date);
   }
 
-  const round = (n) => Math.round(n * 100) / 100;
-
   return {
     billingCycle: cycle,
     bankCurrency,
-    totalAmountBase: round(totalAmountBase),
-    totalBankAmount: round(totalBankAmount),
+    totalAmountBase,
+    totalBankAmount,
     transactionCount: transactions.length,
     transactions,
   };
