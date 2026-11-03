@@ -1,5 +1,5 @@
 const { Router } = require("express");
-const { body } = require("express-validator");
+const { body, query } = require("express-validator");
 const controller = require("../controllers/transferController");
 const authenticateToken = require("../middlewares/auth");
 const validateRequest = require("../middlewares/validateRequest");
@@ -29,8 +29,19 @@ const rules = [
   body("description").optional({ nullable: true }).isString(),
 ];
 
+const listQueryRules = [
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("page debe ser un entero mayor o igual a 1"),
+  query("pageSize")
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage("pageSize debe estar entre 1 y 50"),
+];
+
 router.post("/", authenticateToken, rules, validateRequest, controller.create);
-router.get("/", authenticateToken, controller.getAll);
+router.get("/", authenticateToken, listQueryRules, validateRequest, controller.getAll);
 router.get(
   "/:id",
   authenticateToken,

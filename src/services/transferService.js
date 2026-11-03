@@ -2,6 +2,7 @@ const db = require("@/config/db");
 const { convertToBase } = require("@/helpers/currencyHelper");
 const { parseMinor, multiplyMinorByRate, divideMinorByRate } = require("@/helpers/money");
 const { getRateByDate } = require("@/services/exchangeRateService");
+const { paginate } = require("@/helpers/paginationHelper");
 const prisma = db.getClient();
 
 const toInt = (v) =>
@@ -127,12 +128,21 @@ exports.create = async (data) => {
     });
 };
 
-exports.getAll = async (userId) =>
-  prisma.transfer.findMany({
-    where: { userId: toInt(userId) },
-    orderBy: [{ date: "desc" }, { id: "desc" }],
-    include: { fromAccount: true, toAccount: true },
-  });
+const transferListOptions = (userId) => ({
+  where: { userId: toInt(userId) },
+  orderBy: [{ date: "desc" }, { id: "desc" }],
+  include: { fromAccount: true, toAccount: true },
+});
+
+exports.getAll = async (userId, pagination) => {
+  const options = transferListOptions(userId);
+
+  if (!pagination) {
+    return prisma.transfer.findMany(options);
+  }
+
+  return paginate("transfer", pagination.page, pagination.pageSize, options);
+};
 
 exports.getById = async (id) =>
   prisma.transfer.findUnique({

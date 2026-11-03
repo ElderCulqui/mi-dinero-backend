@@ -14,7 +14,11 @@ const getById = async (req, res) => res.json(await service.getById(req.params.id
 
 const getAll = async (req, res) => {
   try {
-    const transfers = await service.getAll(req.user.id);
+    const { page, pageSize } = req.query;
+    const pagination = page
+      ? { page: parseInt(page, 10), pageSize: parseInt(pageSize ?? "10", 10) }
+      : undefined;
+    const transfers = await service.getAll(req.user.id, pagination);
     res.json(transfers);
   } catch (error) {
     res.status(500).json({ error: error.message });
