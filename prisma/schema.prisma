@@ -80,7 +80,8 @@ model Account {
   name        String
   type        AccountType
   currency    Currency    @default(PEN)
-  balance     BigInt       @default(0)
+  openingBalanceMinor BigInt @default(0)
+  openingBalanceDate  DateTime @default(now())
   creditLimit BigInt?
   isActive    Boolean     @default(true)
   isDefault   Boolean     @default(false)

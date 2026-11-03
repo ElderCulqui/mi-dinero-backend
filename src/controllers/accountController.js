@@ -10,7 +10,14 @@ const create = async (req, res) => {
   }
 };
 
-const getById = async (req, res) => res.json(req.ownedResource);
+const getById = async (req, res) => {
+  try {
+    const account = await accountService.getById(req.ownedResource.id);
+    res.json(account);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
 const getAll = async (req, res) => {
   try {

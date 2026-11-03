@@ -26,11 +26,15 @@ const rules = [
     .isString()
     .matches(/^(0|[1-9]\d*)$/)
     .withMessage("creditLimit debe ser una cadena entera en unidades menores"),
-  body("balance")
+  body("openingBalanceMinor")
     .optional()
     .isString()
     .matches(/^-?\d+$/)
-    .withMessage("balance debe ser una cadena entera en unidades menores"),
+    .withMessage("openingBalanceMinor debe ser una cadena entera en unidades menores"),
+  body("openingBalanceDate")
+    .optional({ nullable: true })
+    .isISO8601()
+    .withMessage("openingBalanceDate debe ser una fecha ISO 8601"),
   body("isDefault").optional().isBoolean(),
   body("currency").optional().isIn(["PEN", "USD"]),
 ];

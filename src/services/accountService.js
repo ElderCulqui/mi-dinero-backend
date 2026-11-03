@@ -1,6 +1,6 @@
 const db = require("../config/db");
-const { paginate } = require("../helpers/paginationHelper");
 const { parseMinor } = require("../helpers/money");
+const { computeAccountBalances } = require("../helpers/accountBalance");
 const prisma = db.getClient();
 
 const parseOptionalMinor = (value) => {
@@ -9,39 +9,122 @@ const parseOptionalMinor = (value) => {
   return parseMinor(value);
 };
 
+const parseOpeningBalanceDate = (value) => {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") {
+    throw Object.assign(new Error("openingBalanceDate es obligatoria"), {
+      status: 400,
+    });
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw Object.assign(new Error("openingBalanceDate inválida"), {
+      status: 400,
+    });
+  }
+
+  return date;
+};
+
+const buildData = (data) => {
+  const next = {
+    ...data,
+    openingBalanceMinor:
+      data.openingBalanceMinor !== undefined
+        ? parseOptionalMinor(data.openingBalanceMinor)
+        : undefined,
+    openingBalanceDate: parseOpeningBalanceDate(data.openingBalanceDate),
+    creditLimit:
+      data.creditLimit !== undefined
+        ? parseOptionalMinor(data.creditLimit)
+        : undefined,
+  };
+
+  if (data.creditCardId !== undefined) {
+    next.creditCardId = data.creditCardId
+      ? parseInt(data.creditCardId, 10)
+      : null;
+  }
+
+  delete next.id;
+  delete next.balance;
+  delete next.openingBalance;
+  delete next.currentBalance;
+  delete next.currentBalanceMinor;
+  delete next.debtMinor;
+  delete next.availableCreditMinor;
+
+  return next;
+};
+
+const getTotals = async (account) => {
+  const rows = await prisma.transaction.groupBy({
+    by: ["type"],
+    where: {
+      accountId: account.id,
+      userId: account.userId,
+      deletedAt: null,
+      status: "ejecutado",
+      date: { gte: account.openingBalanceDate },
+    },
+    _sum: { amount: true },
+  });
+
+  return rows.reduce(
+    (totals, row) => {
+      if (row.type === "ingreso") totals.income = row._sum.amount ?? 0n;
+      if (row.type === "egreso") totals.expense = row._sum.amount ?? 0n;
+      return totals;
+    },
+    { income: 0n, expense: 0n },
+  );
+};
+
+const withBalances = async (account) => {
+  const totals = await getTotals(account);
+  return { ...account, ...computeAccountBalances(account, totals) };
+};
+
 exports.create = async (data) => {
   const conflict = await prisma.account.findFirst({
     where: { name: data.name, type: data.type, userId: data.userId },
   });
   if (conflict) throw new Error("La cuenta con el mismo nombre y tipo ya existe");
 
-  return prisma.account.create({
+  const account = await prisma.account.create({
     data: {
-      ...data,
+      ...buildData(data),
       userId: parseInt(data.userId),
       creditCardId: data.creditCardId ? parseInt(data.creditCardId) : null,
-      balance: data.balance !== undefined ? parseOptionalMinor(data.balance) : undefined,
-      creditLimit: data.creditLimit !== undefined ? parseOptionalMinor(data.creditLimit) : undefined,
     },
   });
+
+  return withBalances(account);
 };
 
-exports.getById = async (id) =>
-  prisma.account.findUnique({ where: { id: parseInt(id) } });
+exports.getById = async (id) => {
+  const account = await prisma.account.findUnique({ where: { id: parseInt(id) } });
+  if (!account) return null;
+  return withBalances(account);
+};
 
-exports.getAll = async (userId) =>
-  prisma.account.findMany({ where: { userId: parseInt(userId) } });
+exports.getAll = async (userId) => {
+  const accounts = await prisma.account.findMany({
+    where: { userId: parseInt(userId) },
+  });
+
+  return Promise.all(accounts.map(withBalances));
+};
 
 exports.update = async (id, data) => {
   try {
-    return await prisma.account.update({
+    const account = await prisma.account.update({
       where: { id: parseInt(id) },
-      data: {
-        ...data,
-        balance: data.balance !== undefined ? parseOptionalMinor(data.balance) : undefined,
-        creditLimit: data.creditLimit !== undefined ? parseOptionalMinor(data.creditLimit) : undefined,
-      },
+      data: buildData(data),
     });
+
+    return withBalances(account);
   } catch (error) {
     if (error.code === "P2025") throw new Error("Account not found");
     throw error;
