@@ -3,12 +3,28 @@ const db = require("@/config/db");
 
 const prisma = db.getClient();
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const utcDayStart = (value) => {
+  const parsed = new Date(value);
+  return new Date(
+    Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()),
+  );
+};
+
+const toDateOnly = (value) => utcDayStart(value).toISOString().slice(0, 10);
+
+const warnFallback = (baseCurrency, targetCurrency, side, requested, used) => {
+  console.warn(
+    `[exchangeRate] Sin tipo de cambio ${baseCurrency}->${targetCurrency} (${side}) para ${toDateOnly(requested)}; usando ${toDateOnly(used.date)} = ${used.rate}`,
+  );
+};
+
 exports.fetchFromSunat = async () => {
   try {
     const urlSunat = "https://api.apis.net.pe/v1/tipo-cambio-sunat";
     const response = await axios.get(urlSunat);
     const latestData = response.data;
-    // console.log("Latest exchange rate from SUNAT:", latestData);
 
     return {
       buy: parseFloat(latestData.compra),
@@ -26,6 +42,8 @@ exports.saveExchangeRate = async (
   source,
   side = "sell",
 ) => {
+  const startOfDay = utcDayStart(new Date());
+
   const existingRate = await prisma.exchangeRate.findFirst({
     where: {
       baseCurrency,
@@ -33,8 +51,8 @@ exports.saveExchangeRate = async (
       source,
       side,
       date: {
-        gte: new Date(new Date().setHours(0, 0, 0, 0)),
-        lt: new Date(new Date().setHours(24, 0, 0, 0)),
+        gte: startOfDay,
+        lt: new Date(startOfDay.getTime() + DAY_MS),
       },
     },
   });
@@ -72,18 +90,59 @@ exports.getLatestExchangeRate = async (baseCurrency, targetCurrency, side = "sel
 };
 
 exports.getRateByDate = async (baseCurrency, targetCurrency, date, side = "sell") => {
+  const day = utcDayStart(date);
+
   return prisma.exchangeRate.findFirst({
     where: {
       baseCurrency,
       targetCurrency,
       side,
       date: {
-        gte: new Date(new Date(date).setHours(0, 0, 0, 0)),
-        lt: new Date(new Date(date).setHours(24, 0, 0, 0)),
+        gte: day,
+        lt: new Date(day.getTime() + DAY_MS),
       },
     },
     orderBy: {
       date: "desc",
     },
   });
+};
+
+exports.getRateForDate = async (baseCurrency, targetCurrency, date, side = "sell") => {
+  const exact = await exports.getRateByDate(baseCurrency, targetCurrency, date, side);
+  if (exact) return { ...exact, fallback: false };
+
+  const day = utcDayStart(date);
+
+  const previous = await prisma.exchangeRate.findFirst({
+    where: {
+      baseCurrency,
+      targetCurrency,
+      side,
+      date: { lte: day },
+    },
+    orderBy: { date: "desc" },
+  });
+
+  if (previous) {
+    warnFallback(baseCurrency, targetCurrency, side, date, previous);
+    return { ...previous, fallback: true };
+  }
+
+  const next = await prisma.exchangeRate.findFirst({
+    where: {
+      baseCurrency,
+      targetCurrency,
+      side,
+      date: { gt: day },
+    },
+    orderBy: { date: "asc" },
+  });
+
+  if (next) {
+    warnFallback(baseCurrency, targetCurrency, side, date, next);
+    return { ...next, fallback: true };
+  }
+
+  return null;
 };

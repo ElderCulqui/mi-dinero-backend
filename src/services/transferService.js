@@ -1,7 +1,7 @@
 const db = require("@/config/db");
 const { convertToBase } = require("@/helpers/currencyHelper");
 const { parseMinor, multiplyMinorByRate, divideMinorByRate } = require("@/helpers/money");
-const { getRateByDate } = require("@/services/exchangeRateService");
+const { getRateForDate } = require("@/services/exchangeRateService");
 const { paginate } = require("@/helpers/paginationHelper");
 const prisma = db.getClient();
 
@@ -10,12 +10,12 @@ const toInt = (v) =>
 
 async function getCrossRate(from, to, date) {
     if (from === to) return { rate: 1, multiply: true };
-    const direct = await getRateByDate(from, to, date, "sell");
+    const direct = await getRateForDate(from, to, date, "sell");
     if (direct) return { rate: direct.rate, multiply: true };
-    const inverse = await getRateByDate(to, from, date, "sell");
+    const inverse = await getRateForDate(to, from, date, "sell");
     if (inverse) return { rate: inverse.rate, multiply: false };
 
-    throw new Error(`No hay tipo de cambio ${from}->${to} para la fecha`);
+    throw Object.assign(new Error(`No hay ningún tipo de cambio ${from}->${to} registrado`), { statusCode: 400 });
 }
 
 async function resolveTransfer(data, userId) {
