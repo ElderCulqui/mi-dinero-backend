@@ -1,7 +1,6 @@
 const db = require("@/config/db");
 const prisma = db.getClient();
 const { generateInstallmentSchedule, recalculateStatus, round2 } = require("@/helpers/scheduleCalculator");
-const { resolveByAccountAndDate } = require("@/helpers/billingCycleResolver");
 const { convertToBase } = require("@/helpers/currencyHelper");
 const { parseMinor } = require("@/helpers/money");
 const { localNoonUtc, toDateOnly } = require("@/helpers/timezone");
@@ -78,7 +77,6 @@ const create = async (userId, data) => {
         account.currency,
         purchaseDate,
     );
-    const billingCycle = await resolveByAccountAndDate(account.id, purchaseDate);
 
     return prisma.$transaction(async (tx) => {
         const purchaseTransaction = await tx.transaction.create({
@@ -92,7 +90,7 @@ const create = async (userId, data) => {
                 date: purchaseDate,
                 description: `Compra en cuotas: ${data.description}`,
                 source: "manual",
-                billingCycleId: billingCycle ? billingCycle.id : null,
+                billingCycleId: null,
             },
         });
 

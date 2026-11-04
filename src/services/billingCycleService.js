@@ -234,13 +234,25 @@ exports.getSummary = async (id) => {
     totalBankAmount += await convertFromBase(t.amountBase, bankCurrency, t.date);
   }
 
+  const previousCycle = await prisma.billingCycle.findFirst({
+    where: {
+      creditCardId: cycle.creditCardId,
+      dueDate: { lt: cycle.dueDate },
+    },
+    orderBy: { dueDate: "desc" },
+  });
+
+  const installmentDueDate = previousCycle
+    ? { gt: previousCycle.dueDate, lte: cycle.dueDate }
+    : { lte: cycle.dueDate };
+
   const installments = await prisma.installment.findMany({
     where: {
       installmentPlan: {
         creditCardId: cycle.creditCardId,
         deletedAt: null,
       },
-      dueDate: { gt: cycle.periodEnd, lte: cycle.dueDate },
+      dueDate: installmentDueDate,
       status: { not: "pagado" },
     },
     include: {
