@@ -1,5 +1,9 @@
 require("dotenv").config();
 
+if (process.env.NODE_ENV === "production" && process.env.ALLOW_SEED !== "1") {
+    throw new Error("Seed bloqueado con NODE_ENV=production (ALLOW_SEED=1 para forzar)");
+}
+
 const db = require("../src/config/db");
 const { generateInstallmentSchedule } = require("../src/helpers/scheduleCalculator");
 const prisma = db.getClient();
