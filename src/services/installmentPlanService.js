@@ -4,6 +4,7 @@ const { generateInstallmentSchedule, recalculateStatus, round2 } = require("@/he
 const { resolveByAccountAndDate } = require("@/helpers/billingCycleResolver");
 const { convertToBase } = require("@/helpers/currencyHelper");
 const { parseMinor } = require("@/helpers/money");
+const { localNoonUtc, toDateOnly } = require("@/helpers/timezone");
 
 const includeInstallments = {
     installments_: { orderBy: { number: "asc" } },
@@ -69,7 +70,9 @@ const create = async (userId, data) => {
         totalAmount,
     });
     const amountPerInstallment = totalAmount / BigInt(count);
-    const purchaseDate = new Date(data.startDate);
+    const startDateOnly = toDateOnly(data.startDate);
+    const firstDueDateOnly = toDateOnly(data.firstDueDate);
+    const purchaseDate = localNoonUtc(startDateOnly, card.timezone);
     const amountBase = await convertToBase(
         totalAmount,
         account.currency,
@@ -103,8 +106,8 @@ const create = async (userId, data) => {
                 totalAmount,
                 installments: count,
                 amountPerInstallment,
-                startDate: purchaseDate,
-                firstDueDate: new Date(data.firstDueDate),
+                startDate: new Date(`${startDateOnly}T00:00:00.000Z`),
+                firstDueDate: new Date(`${firstDueDateOnly}T00:00:00.000Z`),
                 installments_: { create: schedule },
             },
             include: includeInstallments,

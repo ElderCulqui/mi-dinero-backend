@@ -13,6 +13,7 @@ const rules = [
   body("name").isString().withMessage("Name requerido"),
   body("brand").optional().isString(),
   body("bankCurrency").optional().isIn(["PEN", "USD"]).withMessage("Currency must be PEN or USD"),
+  body("timezone").optional().isString(),
   body("isActive").optional().isBoolean(),
 ];
 

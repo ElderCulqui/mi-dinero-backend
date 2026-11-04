@@ -3,6 +3,9 @@ const mockPrisma = {
     findMany: jest.fn(),
     findUnique: jest.fn(),
   },
+  user: {
+    findUnique: jest.fn(),
+  },
   transaction: {
     groupBy: jest.fn(),
   },
@@ -21,13 +24,16 @@ const bankAccount = {
   type: "cuenta_bancaria",
   currency: "PEN",
   openingBalanceMinor: 10000n,
-  openingBalanceDate: new Date("2026-11-03T05:00:00.000Z"),
+  openingBalanceDate: new Date("2026-11-03T00:00:00.000Z"),
   creditLimit: null,
 };
 
 describe("accountService balances", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPrisma.user.findUnique.mockResolvedValue({
+      timezone: "America/Lima",
+    });
   });
 
   it("calcula el saldo actual solo con movimientos desde la fecha de apertura", async () => {
@@ -47,7 +53,7 @@ describe("accountService balances", () => {
         userId: 7,
         deletedAt: null,
         status: "ejecutado",
-        date: { gte: bankAccount.openingBalanceDate },
+        date: { gte: new Date("2026-11-03T05:00:00.000Z") },
       },
       _sum: { amount: true },
     });

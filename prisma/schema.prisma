@@ -17,6 +17,7 @@ model User {
   email      String     @unique
   password   String
   name       String?
+  timezone   String     @default("America/Lima")
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
   deletedAt  DateTime?
@@ -93,7 +94,7 @@ model Account {
   type        AccountType
   currency    Currency    @default(PEN)
   openingBalanceMinor BigInt @default(0)
-  openingBalanceDate  DateTime @default(now())
+  openingBalanceDate  DateTime @db.Date @default(dbgenerated("CURRENT_DATE"))
   creditLimit BigInt?
   isActive    Boolean     @default(true)
   isDefault   Boolean     @default(false)
@@ -143,7 +144,7 @@ model ExchangeRate {
   baseCurrency   String
   targetCurrency String
   rate           Float
-  date           DateTime
+  date           DateTime @db.Date
   source         String
   side           RateSide   @default(sell)
   createdAt      DateTime  @default(now())
@@ -157,9 +158,9 @@ model BillingCycle {
   id             Int       @id @default(autoincrement())
   userId         Int
   creditCardId      Int
-  periodStart    DateTime
-  periodEnd      DateTime
-  dueDate        DateTime
+  periodStart    DateTime @db.Date
+  periodEnd      DateTime @db.Date
+  dueDate        DateTime @db.Date
   bankAmount     BigInt?
   bankAmountUsd  BigInt?
   minimumPaymentMinor    BigInt?
@@ -169,8 +170,8 @@ model BillingCycle {
   lineUsedMinor          BigInt?
   paidAmountMinor        BigInt?
   paidAmountUsdMinor     BigInt?
-  paidDate               DateTime?
-  statementRegisteredAt  DateTime?
+  paidDate               DateTime? @db.Timestamptz(3)
+  statementRegisteredAt  DateTime? @db.Timestamptz(3)
   status         CycleStatus @default(abierto)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -192,7 +193,7 @@ model Transaction {
   amount        BigInt
   amountBase    BigInt
   description   String?
-  date          DateTime
+  date          DateTime @db.Timestamptz(3)
   status        TxnStatus  @default(ejecutado)
   source        TxnSource  @default(manual)
   billingCycleId  Int?
@@ -266,7 +267,7 @@ model TransactionShare {
   contactId           Int
   amount              BigInt //Lo que debe, en la divisa de la transaccion
   status              ShareStatus
-  paidDate            DateTime?
+  paidDate            DateTime? @db.Timestamptz(3)
   settlementRate      Float? // TC usado para cobrar (PEN por USD, etc.)
   settlementCurrency  Currency? // divisa en que te pagó (ej. PEN)
   settlementAmount    BigInt? // monto recibido (en settlementCurrency)
@@ -296,7 +297,7 @@ model Loan {
   totalAmount         BigInt
   interestRate        Float?
   termMonths          Int
-  startDate           DateTime
+  startDate           DateTime @db.Date
   status              LoanStatus  @default(activo)
   accountId           Int?
   categoryId          Int?
@@ -324,11 +325,11 @@ model LoanPayment {
   id                  Int   @id @default(autoincrement())
   loanId              Int
   number              Int
-  dueDate             DateTime
+  dueDate             DateTime @db.Date
   amount              BigInt   // cuota esperada (en divisa del préstamo)
   paidAmount          BigInt  @default(0) // acumulado de pagos (amortización parcial/total)
   status              PayStatus @default(pendiente)
-  paidDate            DateTime?
+  paidDate            DateTime? @db.Timestamptz(3)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   deletedAt           DateTime?
@@ -354,8 +355,8 @@ model InstallmentPlan {
   totalAmount       BigInt
   installments      Int
   amountPerInstallment  BigInt
-  startDate         DateTime
-  firstDueDate      DateTime
+  startDate         DateTime @db.Date
+  firstDueDate      DateTime @db.Date
   status            PlanStatus    @default(activo)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -373,11 +374,11 @@ model Installment {
   id                Int   @id @default(autoincrement())
   installmentPlanId Int
   number            Int
-  dueDate           DateTime
+  dueDate           DateTime @db.Date
   amount            BigInt   // couta esperada
   paidAmount        BigInt @default(0)
   status            PayStatus @default(pendiente)
-  paidDate          DateTime?
+  paidDate          DateTime? @db.Timestamptz(3)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   deletedAt         DateTime?
@@ -395,6 +396,7 @@ model CreditCard {
   name              String
   brand             String?
   bankCurrency      Currency?
+  timezone          String   @default("America/Lima")
   isActive          Boolean @default(true)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -438,10 +440,10 @@ model ContactDebt {
   description   String
   amountMinor   BigInt
   currency      Currency
-  date          DateTime
-  dueDate       DateTime?
+  date          DateTime @db.Date
+  dueDate       DateTime? @db.Date
   status        DebtStatus    @default(pendiente)
-  paidDate      DateTime?
+  paidDate      DateTime? @db.Timestamptz(3)
   transactionId Int?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt

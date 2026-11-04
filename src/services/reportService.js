@@ -1,34 +1,17 @@
 const db = require("@/config/db");
+const {
+    normalizeTimeZone,
+    monthRangeUtc,
+} = require("@/helpers/timezone");
 const prisma = db.getClient();
 
-const monthRange = (month) => {
-    const now = new Date();
-    let year = now.getUTCFullYear();
-    let monthIndex = now.getUTCMonth();
-
-    if (month) {
-        const match = /^(\d{4})-(\d{2})$/.exec(month);
-        if (!match) {
-            throw Object.assign(new Error("month debe tener el formato YYYY-MM"), {
-                status: 400,
-            });
-        }
-        year = Number(match[1]);
-        monthIndex = Number(match[2]) - 1;
-        if (monthIndex < 0 || monthIndex > 11) {
-            throw Object.assign(new Error("month inválido"), { status: 400 });
-        }
-    }
-
-    return {
-        from: new Date(Date.UTC(year, monthIndex, 1)),
-        to: new Date(Date.UTC(year, monthIndex + 1, 1)),
-        key: `${year}-${String(monthIndex + 1).padStart(2, "0")}`,
-    };
-};
-
 exports.getMonthlySummary = async (userId, month) => {
-    const { from, to, key } = monthRange(month);
+    const user = await prisma.user.findUnique({
+        where: { id: parseInt(userId) },
+        select: { timezone: true },
+    });
+    const timeZone = normalizeTimeZone(user?.timezone);
+    const { from, to, key } = monthRangeUtc(month, timeZone);
 
     const transactions = await prisma.transaction.findMany({
         where: {

@@ -8,8 +8,7 @@ const CUTOFF = new Date("2026-11-03T00:00:00.000Z");
 const CARD_NAME = "VISA BCP";
 const CARD_LIMIT_MINOR = 1718100n;
 
-const date = (value, endOfDay = false) =>
-    new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`);
+const date = (value) => new Date(`${value}T00:00:00.000Z`);
 
 const log = (...args) => console.log("[seed]", ...args);
 
@@ -112,6 +111,7 @@ const main = async () => {
                   name: CARD_NAME,
                   brand: "Visa",
                   bankCurrency: "PEN",
+                  timezone: "America/Lima",
                   isActive: true,
               },
           });
@@ -201,13 +201,13 @@ const main = async () => {
         ["2026-06-11", "2026-07-10", "2026-08-05"],
         ["2026-07-11", "2026-08-10", "2026-09-07"],
         ["2026-08-11", "2026-09-10", "2026-10-05"],
-        ["2026-09-11", "2026-10-10", "2026-11-05"],
-        ["2026-10-11", "2026-11-10", "2026-12-07"],
+        ["2026-09-11", "2026-10-11", "2026-11-05"],
+        ["2026-10-12", "2026-11-10", "2026-12-07"],
         ["2026-11-11", "2026-12-10", "2027-01-05"],
     ];
 
     for (const [start, end, due] of cycles) {
-        const periodEnd = date(end, true);
+        const periodEnd = date(end);
         await upsertCycle(userId, savedCard.id, {
             periodStart: date(start),
             periodEnd,

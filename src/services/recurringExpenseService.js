@@ -2,6 +2,12 @@ const db = require("@/config/db");
 const { convertToBase } = require("@/helpers/currencyHelper");
 const { parseMinor } = require("@/helpers/money");
 const { resolveByAccountAndDate } = require("@/helpers/billingCycleResolver");
+const {
+    DEFAULT_TIMEZONE,
+    normalizeTimeZone,
+    localNoonUtc,
+} = require("@/helpers/timezone");
+const { DateTime } = require("luxon");
 const prisma = db.getClient();
 
 const parseAccountId = (value) => {
@@ -120,39 +126,43 @@ exports.remove = async (userId, id) => {
     return prisma.recurringExpense.delete({ where: { id: recurring.id } });
 };
 
-const monthKey = (date) =>
-    `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-
 exports.processDue = async () => {
-    const now = new Date();
-    const currentMonth = monthKey(now);
-    const today = now.getUTCDate();
-
     const items = await prisma.recurringExpense.findMany({
         where: { isActive: true },
     });
     const created = [];
+    const userZones = new Map();
 
     for (const item of items) {
-        if (item.lastRunMonth === currentMonth) continue;
-        if (today < item.dayOfMonth) continue;
-
         const account = await prisma.account.findUnique({
             where: { id: item.accountId },
+            include: { creditCard: { select: { timezone: true } } },
         });
         if (!account || account.deletedAt) continue;
 
-        const date = new Date(
-            Date.UTC(
-                now.getUTCFullYear(),
-                now.getUTCMonth(),
-                item.dayOfMonth,
-                12,
-                0,
-                0,
-                0,
-            ),
+        let userZone = userZones.get(item.userId);
+        if (!userZone) {
+            const user = await prisma.user.findUnique({
+                where: { id: item.userId },
+                select: { timezone: true },
+            });
+            userZone = normalizeTimeZone(user?.timezone);
+            userZones.set(item.userId, userZone);
+        }
+
+        const scheduleZone = normalizeTimeZone(
+            account.creditCard?.timezone || userZone || DEFAULT_TIMEZONE,
         );
+        const nowInZone = DateTime.now().setZone(scheduleZone);
+        const currentMonth = nowInZone.toFormat("yyyy-MM");
+
+        if (item.lastRunMonth === currentMonth) continue;
+        if (nowInZone.day < item.dayOfMonth) continue;
+
+        const dateOnly = nowInZone
+            .set({ day: item.dayOfMonth })
+            .toISODate();
+        const date = localNoonUtc(dateOnly, scheduleZone);
         const amountBase = await convertToBase(
             item.amountMinor,
             item.currency,
@@ -191,5 +201,3 @@ exports.processDue = async () => {
 
     return created;
 };
-
-exports.monthKey = monthKey;

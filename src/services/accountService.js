@@ -1,6 +1,11 @@
 const db = require("../config/db");
 const { parseMinor } = require("../helpers/money");
 const { computeAccountBalances } = require("../helpers/accountBalance");
+const {
+  DEFAULT_TIMEZONE,
+  normalizeTimeZone,
+  startOfDayUtc,
+} = require("../helpers/timezone");
 const prisma = db.getClient();
 
 const parseOptionalMinor = (value) => {
@@ -58,7 +63,7 @@ const buildData = (data) => {
   return next;
 };
 
-const getTotals = async (account) => {
+const getTotals = async (account, timeZone = DEFAULT_TIMEZONE) => {
   const rows = await prisma.transaction.groupBy({
     by: ["type"],
     where: {
@@ -66,7 +71,9 @@ const getTotals = async (account) => {
       userId: account.userId,
       deletedAt: null,
       status: "ejecutado",
-      date: { gte: account.openingBalanceDate },
+      date: {
+        gte: startOfDayUtc(account.openingBalanceDate, timeZone),
+      },
     },
     _sum: { amount: true },
   });
@@ -81,8 +88,20 @@ const getTotals = async (account) => {
   );
 };
 
-const withBalances = async (account, statementLineUsedMinor = null) => {
-  const totals = await getTotals(account);
+const getUserTimeZone = async (userId) => {
+  const user = await prisma.user.findUnique({
+    where: { id: parseInt(userId) },
+    select: { timezone: true },
+  });
+  return normalizeTimeZone(user?.timezone);
+};
+
+const withBalances = async (
+  account,
+  statementLineUsedMinor = null,
+  timeZone = DEFAULT_TIMEZONE,
+) => {
+  const totals = await getTotals(account, timeZone);
   const balances = computeAccountBalances(account, totals);
 
   if (
@@ -133,7 +152,7 @@ exports.create = async (data) => {
     },
   });
 
-  return withBalances(account);
+  return withBalances(account, null, await getUserTimeZone(account.userId));
 };
 
 exports.getById = async (id) => {
@@ -151,7 +170,11 @@ exports.getById = async (id) => {
     }
   }
 
-  return withBalances(account, lineUsedMinor);
+  return withBalances(
+    account,
+    lineUsedMinor,
+    await getUserTimeZone(account.userId),
+  );
 };
 
 exports.getAll = async (userId) => {
@@ -171,6 +194,7 @@ exports.getAll = async (userId) => {
     parsedUserId,
     cardIds,
   );
+  const timeZone = await getUserTimeZone(parsedUserId);
 
   return Promise.all(
     accounts.map((account) => {
@@ -182,7 +206,7 @@ exports.getAll = async (userId) => {
           ? cycle.lineUsedMinor
           : null;
 
-      return withBalances(account, lineUsedMinor);
+      return withBalances(account, lineUsedMinor, timeZone);
     }),
   );
 };
@@ -194,7 +218,11 @@ exports.update = async (id, data) => {
       data: buildData(data),
     });
 
-    return withBalances(account);
+    return withBalances(
+      account,
+      null,
+      await getUserTimeZone(account.userId),
+    );
   } catch (error) {
     if (error.code === "P2025") throw new Error("Account not found");
     throw error;

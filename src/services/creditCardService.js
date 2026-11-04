@@ -1,4 +1,5 @@
 const db = require("../config/db");
+const { normalizeTimeZone } = require("@/helpers/timezone");
 const prisma = db.getClient();
 
 const DEFAULT_CURRENCY = "PEN";
@@ -10,6 +11,7 @@ exports.create = async (data) => {
       data: {
         ...data,
         bankCurrency: data.bankCurrency || DEFAULT_CURRENCY,
+        timezone: normalizeTimeZone(data.timezone),
         userId: toInt(data.userId)
       },
     });
@@ -30,9 +32,13 @@ exports.getById = async (id) => {
 
 exports.update = async (id, data) => {
   try {
+    const payload = { ...data };
+    if (payload.timezone !== undefined) {
+      payload.timezone = normalizeTimeZone(payload.timezone);
+    }
     return await prisma.creditCard.update({
       where: { id: parseInt(id) },
-      data,
+      data: payload,
     });
   } catch (error) {
     if (error.code === "P2025") throw new Error("CreditCard not found");

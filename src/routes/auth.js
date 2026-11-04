@@ -10,11 +10,13 @@ const registerRules = [
   body("email").isEmail().withMessage("email inválido").normalizeEmail(),
   body("password").isLength({ min: 8 }).withMessage("password ≥ 8 caracteres"),
   body("name").optional().isString().isLength({ min: 1, max: 100 }),
+  body("timezone").optional().isString(),
 ];
 
 const loginRules = [
   body("email").isEmail().withMessage("email inválido").normalizeEmail(),
   body("password").notEmpty().withMessage("password requerido"),
+  body("timezone").optional().isString(),
 ];
 
 router.post("/register", registerRules, validateRequest, controller.register);
