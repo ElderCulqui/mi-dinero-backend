@@ -13,6 +13,7 @@ const loansRouter = require("./loans");
 const installmentPlansRouter = require("./installmentPlans");
 const recurringExpensesRouter = require("./recurringExpenses");
 const contactDebtsRouter = require("./contactDebts");
+const reportsRouter = require("./reports");
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use("/loans", loansRouter);
 router.use("/installment-plans", installmentPlansRouter);
 router.use("/recurring-expenses", recurringExpensesRouter);
 router.use("/contact-debts", contactDebtsRouter);
+router.use("/reports", reportsRouter);
 
 module.exports = router;
