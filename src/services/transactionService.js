@@ -120,10 +120,16 @@ exports.update = async (id, data) => {
   const date = data.date !== undefined ? new Date(data.date) : current.date;
   const amountBase = await convertToBase(amount, account.currency, date);
 
-  let billingCycleId = null;
+  let billingCycleId = current.billingCycleId;
   if (account.type == AccountType.tarjeta_credito && account.creditCardId) {
-    const cycle = await resolveByAccountAndDate(account.id, date)
-    billingCycleId = cycle ? cycle.id : null;
+    // Las transacciones sin ciclo (por ejemplo, la compra de un plan de cuotas)
+    // siguen sin ciclo: el estado de cuenta cuenta las cuotas, no la compra.
+    if (current.billingCycleId !== null) {
+      const cycle = await resolveByAccountAndDate(account.id, date);
+      billingCycleId = cycle ? cycle.id : null;
+    }
+  } else {
+    billingCycleId = null;
   }
   if (data.billingCycleId !== undefined) {
     billingCycleId = safeParseInt(data.billingCycleId) ?? null;
