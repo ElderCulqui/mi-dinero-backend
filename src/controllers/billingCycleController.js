@@ -69,6 +69,18 @@ const getSummary = async (req, res) => {
   }
 }
 
+const updateStatement = async (req, res) => {
+  try {
+    const updated = await billingCycleService.updateStatement(
+      req.params.id,
+      req.body,
+    );
+    res.json(updated);
+  } catch (error) {
+    res.status(error.status || 400).json({ error: error.message });
+  }
+}
+
 module.exports = {
   create,
   update,
@@ -77,5 +89,6 @@ module.exports = {
   getByCreditCard,
   createByCreditCard,
   getSummary,
+  updateStatement,
   destroy,
 };

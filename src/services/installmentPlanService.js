@@ -11,7 +11,7 @@ const includeInstallments = {
     category: { select: { id: true, name: true } },
 };
 
-const resolveCardAndAccount = async (userId, cardId) => {
+const resolveCardAndAccount = async (userId, cardId, currency = null) => {
     const card = await prisma.creditCard.findFirst({
         where: { id: Number(cardId), userId},
     });
@@ -20,17 +20,19 @@ const resolveCardAndAccount = async (userId, cardId) => {
         err.status = 400;
         throw err;
     }
-    if (!card.bankCurrency) {
+
+    const accountCurrency = currency || card.bankCurrency;
+    if (!accountCurrency) {
         const err = new Error("La tarjeta no tiene bankCurrency definido");
         err.status = 400;
         throw err;
     }
 
     const account = await prisma.account.findFirst({
-        where: { creditCardId: card.id, currency: card.bankCurrency, deletedAt: null },
+        where: { creditCardId: card.id, currency: accountCurrency, deletedAt: null },
     });
     if (!account) {
-        const err = new Error(`La tarjeta no tiene cuenta en ${card.bankCurrency}`);
+        const err = new Error(`La tarjeta no tiene cuenta en ${accountCurrency}`);
         err.status = 400;
         throw err;
     }
@@ -51,7 +53,12 @@ const validateCategory = async (userId, categoryId) => {
 };
 
 const create = async (userId, data) => {
-    const { card } = await resolveCardAndAccount(userId, data.creditCardId);
+    const planCurrency = data.currency || null;
+    const { card, account } = await resolveCardAndAccount(
+        userId,
+        data.creditCardId,
+        planCurrency,
+    );
     await validateCategory(userId, data.categoryId);
 
     const totalAmount = parseMinor(data.totalAmount);
@@ -62,22 +69,48 @@ const create = async (userId, data) => {
         totalAmount,
     });
     const amountPerInstallment = totalAmount / BigInt(count);
+    const purchaseDate = new Date(data.startDate);
+    const amountBase = await convertToBase(
+        totalAmount,
+        account.currency,
+        purchaseDate,
+    );
+    const billingCycle = await resolveByAccountAndDate(account.id, purchaseDate);
 
-    return prisma.installmentPlan.create({
-        data: {
-            userId,
-            creditCardId: card.id,
-            categoryId: data.categoryId ? Number(data.categoryId) : null,
-            description: data.description,
-            currency: data.currency ?? card.bankCurrency,
-            totalAmount,
-            installments: count,
-            amountPerInstallment,
-            startDate: new Date(data.startDate),
-            firstDueDate: new Date(data.firstDueDate),
-            installments_: { create: schedule },
-        },
-        include: includeInstallments,
+    return prisma.$transaction(async (tx) => {
+        const purchaseTransaction = await tx.transaction.create({
+            data: {
+                userId,
+                accountId: account.id,
+                categoryId: data.categoryId ? Number(data.categoryId) : null,
+                type: "egreso",
+                amount: totalAmount,
+                amountBase,
+                date: purchaseDate,
+                description: `Compra en cuotas: ${data.description}`,
+                source: "manual",
+                billingCycleId: billingCycle ? billingCycle.id : null,
+            },
+        });
+
+        const plan = await tx.installmentPlan.create({
+            data: {
+                userId,
+                creditCardId: card.id,
+                categoryId: data.categoryId ? Number(data.categoryId) : null,
+                description: data.description,
+                currency: account.currency,
+                totalAmount,
+                installments: count,
+                amountPerInstallment,
+                startDate: purchaseDate,
+                firstDueDate: new Date(data.firstDueDate),
+                installments_: { create: schedule },
+            },
+            include: includeInstallments,
+        });
+
+        return { ...plan, purchaseTransaction };
     });
 };
 
@@ -168,35 +201,93 @@ const payInstallment = async (userId, planId, installmentId, data) => {
     throw err;
   }
 
-  const { account } = await resolveCardAndAccount(userId, plan.creditCardId);
-  await validateCategory(userId, data.categoryId);
+  const { account: cardAccount } = await resolveCardAndAccount(
+    userId,
+    plan.creditCardId,
+    plan.currency,
+  );
+
+  const sourceAccount = await prisma.account.findUnique({
+    where: { id: Number(data.accountId) },
+  });
+  if (!sourceAccount) {
+    const err = new Error("La cuenta de pago no existe o fue eliminada");
+    err.status = 400;
+    throw err;
+  }
+  if (sourceAccount.userId !== userId) {
+    const err = new Error("No autorizado");
+    err.status = 403;
+    throw err;
+  }
+  if (sourceAccount.type === "tarjeta_credito") {
+    const err = new Error("Selecciona una cuenta de banco o efectivo para pagar");
+    err.status = 400;
+    throw err;
+  }
+  if (sourceAccount.currency !== plan.currency) {
+    const err = new Error(`La cuenta de pago debe estar en ${plan.currency}`);
+    err.status = 400;
+    throw err;
+  }
 
   const date = data.date ? new Date(data.date) : new Date();
   const description =
     data.description ??
-    `Cuota ${plan.description} - ${installment.number}/${plan.installments}`;
-
-  const billingCycle = await resolveByAccountAndDate(account.id, date);
+    `Pago cuota ${plan.description} - ${installment.number}/${plan.installments}`;
+  const amountBase = await convertToBase(amount, sourceAccount.currency, date);
 
   return prisma.$transaction(async (tx) => {
-    const transaction = await tx.transaction.create({
+    const fromTransaction = await tx.transaction.create({
       data: {
         userId,
-        accountId: account.id,
-        categoryId: data.categoryId ? Number(data.categoryId) : plan.categoryId ?? null,
+        accountId: sourceAccount.id,
+        categoryId: null,
         type: "egreso",
         amount,
-        amountBase: await convertToBase(amount, account.currency, date),
+        amountBase,
         date,
         description,
-        source: "installment",
-        billingCycleId: billingCycle ? billingCycle.id : null,
-        installmentId: installment.id,
+        source: "transfer",
+        billingCycleId: null,
       },
     });
+
+    const toTransaction = await tx.transaction.create({
+      data: {
+        userId,
+        accountId: cardAccount.id,
+        categoryId: null,
+        type: "ingreso",
+        amount,
+        amountBase,
+        date,
+        description,
+        source: "transfer",
+        billingCycleId: null,
+      },
+    });
+
+    const transfer = await tx.transfer.create({
+      data: {
+        userId,
+        fromAccountId: sourceAccount.id,
+        toAccountId: cardAccount.id,
+        fromAmount: amount,
+        toAmount: amount,
+        fromCurrency: sourceAccount.currency,
+        toCurrency: cardAccount.currency,
+        rate: 1,
+        date,
+        description,
+        fromTxnId: fromTransaction.id,
+        toTxnId: toTransaction.id,
+      },
+    });
+
     const newPaid = installment.paidAmount + amount;
     const newStatus = recalculateStatus(installment.amount, newPaid);
-    const updated = await tx.installment.update({
+    const updatedInstallment = await tx.installment.update({
       where: { id: installment.id },
       data: {
         paidAmount: newPaid,
@@ -204,7 +295,28 @@ const payInstallment = async (userId, planId, installmentId, data) => {
         status: newStatus,
       },
     });
-    return { transaction, installment: updated };
+
+    const installments = await tx.installment.findMany({
+      where: { installmentPlanId: plan.id, deletedAt: null },
+      select: { amount: true, paidAmount: true },
+    });
+    const allPaid =
+      installments.length > 0 &&
+      installments.every((item) => item.paidAmount >= item.amount);
+
+    if (allPaid) {
+      await tx.installmentPlan.update({
+        where: { id: plan.id },
+        data: { status: "pagado" },
+      });
+    }
+
+    return {
+      transfer,
+      transaction: toTransaction,
+      fromTransaction,
+      installment: updatedInstallment,
+    };
   });
 };
 

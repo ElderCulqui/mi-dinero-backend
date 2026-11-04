@@ -51,12 +51,13 @@ router.post(
   [
     paramIntId("id"),
     paramIntId("installmentId"),
+    body("accountId").isInt().withMessage("accountId es requerido"),
+    existsActiveOwnedByUser("account", "body", "accountId", "Account"),
     body("amount")
       .isString()
       .matches(/^[1-9]\d*$/)
       .withMessage("amount debe ser una cadena entera positiva en unidades menores"),
     body("date").optional({ nullable: true }).isISO8601(),
-    existsActiveOwnedByUser("category", "body", "categoryId", "Category", { optional: true }),
     body("description").optional({ nullable: true }).isString().isLength({ max: 500 }),
   ],
   validate,

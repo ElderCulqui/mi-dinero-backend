@@ -29,6 +29,8 @@ model User {
   contacts      Contact[]
   creditCards   CreditCard[]
   installmentPlans  InstallmentPlan[]
+  recurringExpenses RecurringExpense[]
+  contactDebts      ContactDebt[]
 
   @@map("users")
 }
@@ -73,6 +75,16 @@ enum ShareStatus {
   cobrado 
 }
 
+enum DebtDirection {
+  por_cobrar
+  por_pagar
+}
+
+enum DebtStatus {
+  pendiente
+  pagado
+}
+
 model Account {
   id          Int         @id @default(autoincrement())
   userId      Int
@@ -96,6 +108,7 @@ model Account {
   toTransfers   Transfer[] @relation("ToAccount")
   transactions  Transaction[]
   loans         Loan[]
+  recurringExpenses RecurringExpense[]
 
   @@map("accounts")
 }
@@ -115,6 +128,7 @@ model Category {
   transactions Transaction[]
   loans        Loan[]
   installmentPlans  InstallmentPlan[]
+  recurringExpenses RecurringExpense[]
 
   @@map("categories")
 }
@@ -147,6 +161,16 @@ model BillingCycle {
   periodEnd      DateTime
   dueDate        DateTime
   bankAmount     BigInt?
+  bankAmountUsd  BigInt?
+  minimumPaymentMinor    BigInt?
+  minimumPaymentUsdMinor BigInt?
+  totalBalanceMinor      BigInt?
+  totalBalanceUsdMinor   BigInt?
+  lineUsedMinor          BigInt?
+  paidAmountMinor        BigInt?
+  paidAmountUsdMinor     BigInt?
+  paidDate               DateTime?
+  statementRegisteredAt  DateTime?
   status         CycleStatus @default(abierto)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -188,6 +212,7 @@ model Transaction {
   reimbursementShares TransactionShare[] @relation("Reimbursement")
   fromTransfers Transfer[] @relation("FromTxn")
   toTransfers   Transfer[] @relation("ToTxn")
+  debtPayments  ContactDebt[] @relation("DebtPayment")
 
   @@map("transactions")
 }
@@ -229,6 +254,7 @@ model Contact {
   deletedAt       DateTime?
 
   transactionShares TransactionShare[]
+  debts             ContactDebt[]
   user            User @relation(fields: [userId], references: [id])
 
   @@map("contacts")
@@ -380,6 +406,52 @@ model CreditCard {
   installmentPlans  InstallmentPlan[]
 
   @@map("credit_cards")
+}
+
+model RecurringExpense {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  accountId    Int
+  categoryId   Int?
+  name         String
+  amountMinor  BigInt
+  currency     Currency
+  dayOfMonth   Int
+  isActive     Boolean   @default(true)
+  lastRunMonth String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  user     User      @relation(fields: [userId], references: [id])
+  account  Account   @relation(fields: [accountId], references: [id])
+  category Category? @relation(fields: [categoryId], references: [id])
+
+  @@map("recurring_expenses")
+}
+
+model ContactDebt {
+  id            Int           @id @default(autoincrement())
+  userId        Int
+  contactId     Int
+  direction     DebtDirection
+  description   String
+  amountMinor   BigInt
+  currency      Currency
+  date          DateTime
+  dueDate       DateTime?
+  status        DebtStatus    @default(pendiente)
+  paidDate      DateTime?
+  transactionId Int?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+
+  user        User        @relation(fields: [userId], references: [id])
+  contact     Contact     @relation(fields: [contactId], references: [id])
+  transaction Transaction? @relation("DebtPayment", fields: [transactionId], references: [id])
+
+  @@map("contact_debts")
 }
 
 

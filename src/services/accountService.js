@@ -81,9 +81,42 @@ const getTotals = async (account) => {
   );
 };
 
-const withBalances = async (account) => {
+const withBalances = async (account, statementLineUsedMinor = null) => {
   const totals = await getTotals(account);
-  return { ...account, ...computeAccountBalances(account, totals) };
+  const balances = computeAccountBalances(account, totals);
+
+  if (
+    account.type === "tarjeta_credito" &&
+    statementLineUsedMinor !== null &&
+    statementLineUsedMinor !== undefined &&
+    account.creditLimit !== null &&
+    account.creditLimit !== undefined
+  ) {
+    balances.availableCreditMinor =
+      account.creditLimit - statementLineUsedMinor;
+  }
+
+  return { ...account, ...balances };
+};
+
+const getLatestStatementByCard = async (userId, cardIds) => {
+  if (cardIds.length === 0) return new Map();
+
+  const cycles = await prisma.billingCycle.findMany({
+    where: {
+      userId,
+      creditCardId: { in: cardIds },
+      lineUsedMinor: { not: null },
+    },
+    orderBy: { periodEnd: "desc" },
+    include: { creditCard: { select: { bankCurrency: true } } },
+  });
+
+  const latest = new Map();
+  for (const cycle of cycles) {
+    if (!latest.has(cycle.creditCardId)) latest.set(cycle.creditCardId, cycle);
+  }
+  return latest;
 };
 
 exports.create = async (data) => {
@@ -106,15 +139,52 @@ exports.create = async (data) => {
 exports.getById = async (id) => {
   const account = await prisma.account.findUnique({ where: { id: parseInt(id) } });
   if (!account) return null;
-  return withBalances(account);
+
+  let lineUsedMinor = null;
+  if (account.creditCardId) {
+    const latest = await getLatestStatementByCard(account.userId, [
+      account.creditCardId,
+    ]);
+    const cycle = latest.get(account.creditCardId);
+    if (cycle && cycle.creditCard.bankCurrency === account.currency) {
+      lineUsedMinor = cycle.lineUsedMinor;
+    }
+  }
+
+  return withBalances(account, lineUsedMinor);
 };
 
 exports.getAll = async (userId) => {
+  const parsedUserId = parseInt(userId);
   const accounts = await prisma.account.findMany({
-    where: { userId: parseInt(userId) },
+    where: { userId: parsedUserId },
   });
 
-  return Promise.all(accounts.map(withBalances));
+  const cardIds = [
+    ...new Set(
+      accounts
+        .map((account) => account.creditCardId)
+        .filter((cardId) => cardId !== null && cardId !== undefined),
+    ),
+  ];
+  const latestStatements = await getLatestStatementByCard(
+    parsedUserId,
+    cardIds,
+  );
+
+  return Promise.all(
+    accounts.map((account) => {
+      const cycle = account.creditCardId
+        ? latestStatements.get(account.creditCardId)
+        : null;
+      const lineUsedMinor =
+        cycle && cycle.creditCard.bankCurrency === account.currency
+          ? cycle.lineUsedMinor
+          : null;
+
+      return withBalances(account, lineUsedMinor);
+    }),
+  );
 };
 
 exports.update = async (id, data) => {

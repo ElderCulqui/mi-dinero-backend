@@ -1,6 +1,7 @@
 const { Router } = require("express");
 const { body, query } = require("express-validator");
 const controller = require("@/controllers/contactController");
+const debtController = require("@/controllers/contactDebtController");
 const authenticateToken = require("@/middlewares/auth");
 const validateRequest = require("@/middlewares/validateRequest");
 const { requireOwnership, paramIntId } = require("@/middlewares/validators");
@@ -10,6 +11,18 @@ const router = Router();
 const rules = [
     body("name").isString().notEmpty().withMessage("Nombre es requerido"),
     body("note").optional({ nullable: true }).isString(),
+];
+
+const debtRules = [
+    body("direction").isIn(["por_cobrar", "por_pagar"]),
+    body("description").isString().isLength({ min: 1, max: 255 }),
+    body("amountMinor")
+        .isString()
+        .matches(/^[1-9]\d*$/)
+        .withMessage("amountMinor debe ser una cadena entera positiva"),
+    body("currency").optional().isIn(["PEN", "USD"]),
+    body("date").optional().isISO8601(),
+    body("dueDate").optional({ nullable: true }).isISO8601(),
 ];
 
 const sharesQueryRules = [
@@ -26,6 +39,31 @@ const sharesQueryRules = [
 
 router.post("/", authenticateToken, rules, validateRequest, controller.create);
 router.get("/", authenticateToken, controller.getAll);
+router.get(
+    "/:id/debts/summary",
+    authenticateToken,
+    paramIntId(),
+    validateRequest,
+    requireOwnership("contact", { notFoundMsg: "Contact not found" }),
+    debtController.getSummary
+);
+router.get(
+    "/:id/debts",
+    authenticateToken,
+    paramIntId(),
+    validateRequest,
+    requireOwnership("contact", { notFoundMsg: "Contact not found" }),
+    debtController.getByContact
+);
+router.post(
+    "/:id/debts",
+    authenticateToken,
+    paramIntId(),
+    debtRules,
+    validateRequest,
+    requireOwnership("contact", { notFoundMsg: "Contact not found" }),
+    debtController.create
+);
 router.get(
     "/:id/summary",
     authenticateToken,

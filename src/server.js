@@ -2,6 +2,7 @@ require("module-alias/register");
 
 const app = require("@/app");
 require("@/jobs/exchangeRateJob");
+require("@/jobs/recurringJob");
 
 const PORT = process.env.PORT || 3000;
 

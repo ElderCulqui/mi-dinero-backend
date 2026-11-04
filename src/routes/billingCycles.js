@@ -54,6 +54,28 @@ const updateRules = [
   maxDaysApart("body", "periodEnd", "periodStart", 31),
 ];
 
+const statementMinorRule = (field) =>
+  body(field)
+    .optional({ nullable: true })
+    .isString()
+    .matches(/^(0|[1-9]\d*)$/)
+    .withMessage(`${field} debe ser una cadena entera en unidades menores`);
+
+const statementRules = [
+  statementMinorRule("bankAmount"),
+  statementMinorRule("bankAmountUsd"),
+  statementMinorRule("minimumPaymentMinor"),
+  statementMinorRule("minimumPaymentUsdMinor"),
+  statementMinorRule("totalBalanceMinor"),
+  statementMinorRule("totalBalanceUsdMinor"),
+  statementMinorRule("lineUsedMinor"),
+  statementMinorRule("paidAmountMinor"),
+  statementMinorRule("paidAmountUsdMinor"),
+  body("paidDate").optional({ nullable: true }).isISO8601(),
+  body("status").optional().isIn(["abierto", "cerrado", "pagado"]),
+  body("updateAccountBalance").optional().isBoolean(),
+];
+
 router.post(
   "/", 
   authenticateToken, 
@@ -69,6 +91,16 @@ router.get(
   validateRequest,
   requireOwnership("billingCycle", { notFoundMsg: "BillingCycle not found" }),
   controller.getSummary
+);
+
+router.put(
+  "/:id/statement",
+  authenticateToken,
+  paramIntId(),
+  statementRules,
+  validateRequest,
+  requireOwnership("billingCycle", { notFoundMsg: "BillingCycle not found" }),
+  controller.updateStatement
 );
 
 router.put(
